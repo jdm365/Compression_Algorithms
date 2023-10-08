@@ -1,47 +1,21 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-// Read data into char array buffer form ../data/declaration_of_independence.txt
 
-
-
-
-char* read_file(const char* filename) {
-	// Creater buffer of indeterminate size
-	char* buffer = nullptr;
-
-	std::ifstream fin;
-	fin.open(filename, std::ios::binary);
-	if (!fin.is_open()) {
-		std::cout << "Error opening file" << std::endl;
-	}
-
-	fin.seekg(0, std::ios::end);
-	int length = fin.tellg();
-	fin.seekg(0, std::ios::beg);
-
-	buffer = (char*)malloc(length * sizeof(char));
-
-	fin.read(buffer, length);
-	fin.close();
-
-	return buffer;
-}
-
-int get_buffer_size_bytes(const char* buffer) {
-	int size = 0;
-	while (buffer[size] != '\0') {
-		size++;
-	}
-	return size;
-}
-
+#include "lz77.h"
+#include "utils.h"
 
 int main() {
-	const char* FILENAME = "../../data/declaration_of_independence.txt";
-	// const char* FILENAME = "../../data/enwik9";
+	// const char* FILENAME = "../../data/declaration_of_independence.txt";
+	const char* FILENAME = "../../data/enwik9";
 
-	char* buffer = read_file(FILENAME);
+	const char* buffer = read_file(FILENAME);
 	std::cout << "Size of buffer: " << get_buffer_size_bytes(buffer) << " bytes" << std::endl;
+
+	int compressed_size = 0;
+	LZ77_t* compressed_buffer = compress_lz77(buffer, compressed_size);
+    std::cout << "Size of compressed data: " << compressed_size * sizeof(LZ77_t) << " bytes" << std::endl;
+
+	free(compressed_buffer);
 	return 0;
 }
