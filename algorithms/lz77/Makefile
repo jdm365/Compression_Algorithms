@@ -11,7 +11,6 @@ BIN = ./bin/release/$(PROJECT_NAME)
 
 all:
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(SRCS) -o $(BIN)
-	## $(CXX) $(CXXFLAGS) $(INCLUDES) $(LDFLAGS) $(SRCS) -o $(BIN)
 
 run: all
 	$(BIN)
