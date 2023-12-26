@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <vector>
 #include <chrono>
 #include <unordered_map>
 #include <string.h>
@@ -10,86 +11,78 @@
 #include "lz77.h"
 #include "utils.h"
 
-#define WINDOW_SIZE 8192 
-#define LOOKAHEAD_BUFFER_SIZE 1024
-// #define LOOKAHEAD_BUFFER_SIZE 65536 
+#define WINDOW_SIZE 4096
+#define LOOKAHEAD_BUFFER_SIZE 256
+#define BASE 257
+#define MOD 1000000007
 
 
-/*
 uint8_t* compress_lz77(const char* input, int& compressed_size) {
-    int input_bytes = strlen(input);  // For simplicity, assume it's a C-string
-    uint8_t* compressed_data = (uint8_t*) malloc(2 * input_bytes);
+    int input_bytes = strlen(input);  // Replace with your get_buffer_size_bytes function if needed
+    std::vector<uint8_t> compressed_data(2 * input_bytes);
     int compressed_data_idx = 0;
     uint8_t flag_byte = 0;
     int flag_bit_pos = 0;
 
-    std::unordered_map<std::string, int> prefix_map;
+    std::unordered_map<long long, int> hashMap;
+    long long rollingHash = 0, power = 1;
 
-    const float one_tenthousandth = input_bytes / 10000.0f;
-    float percent_boundary = 0.0f;
-    std::cout << std::setprecision(2);
+    // Initialize rolling hash and power for the first window
+    for (int i = 0; i < WINDOW_SIZE && i < input_bytes; ++i) {
+        rollingHash = (rollingHash * BASE + input[i]) % MOD;
+        if (i != 0) power = (power * BASE) % MOD;
+    }
+    
+    if (WINDOW_SIZE < input_bytes) {
+        hashMap[rollingHash] = 0;
+    }
 
-    int idx = 0;
-
-    int iters_left = 10000;
-    int time_remaining_seconds = 0;
-    int time_remaining_minutes = 0;
-    auto start = std::chrono::high_resolution_clock::now();
-    auto time_elapsed = std::chrono::high_resolution_clock::now() - start;
-
-    while (idx < input_bytes) {
-        if (idx > percent_boundary) {
-            time_elapsed = std::chrono::high_resolution_clock::now() - start;
-            time_remaining_seconds = static_cast<int>(time_elapsed.count() * iters_left * 1e-9);
-            time_remaining_minutes = time_remaining_seconds / 60;
-            std::cout << "\rCompressing: " << (100.0f * idx / input_bytes) << "%       ETA: " << time_remaining_minutes << "m " << time_remaining_seconds % 60 << "s" << std::flush;
-            percent_boundary += one_tenthousandth;
-            iters_left--;
-            start = std::chrono::high_resolution_clock::now();
+    for (int idx = 0; idx < input_bytes; ++idx) {
+        // Remove the old character from the rolling hash and update the hash map
+        if (idx >= WINDOW_SIZE) {
+            int old_start = idx - WINDOW_SIZE;
+            rollingHash = ((rollingHash - input[old_start] * power) % MOD + MOD) % MOD;
+            hashMap[rollingHash] = old_start + 1;
         }
 
-        int longest_match_length = 0;
-        int longest_match_offset = 0;
+		if (idx % 1000000 == 0) {
+			std::cout << idx / 1000000 << " MB processed" << std::endl;
+		}
 
-        // Update prefix_map with new substrings
-        int window_start = std::max(idx - WINDOW_SIZE, 0);
-        int window_end = idx;
-        int lookahead_start = idx;
-        int lookahead_end = std::min(idx + LOOKAHEAD_BUFFER_SIZE, input_bytes);
-        
-        for (int len = 1; lookahead_start + len <= lookahead_end; ++len) {
-            std::string prefix(&input[lookahead_start], len);
-            prefix_map[prefix] = lookahead_start;
-        }
+        // Add the new character to the rolling hash
+        rollingHash = (rollingHash * BASE + input[idx]) % MOD;
 
-        for (int len = 1; lookahead_start + len <= lookahead_end; ++len) {
-            std::string prefix(&input[lookahead_start], len);
-            auto it = prefix_map.find(prefix);
-            if (it != prefix_map.end() && it->second < window_end && it->second >= window_start) {
-                int match_length = len;
-                longest_match_length = match_length;
-                longest_match_offset = idx - it->second;
+        // Try to find a match in the hash map
+        int longest_match_length = 0, longest_match_offset = 0;
+        if (hashMap.find(rollingHash) != hashMap.end()) {
+            int offset = idx - hashMap[rollingHash];
+            int len = 0;
+            while (idx + len < input_bytes && input[hashMap[rollingHash] + len] == input[idx + len]) {
+                ++len;
+            }
+            if (len > longest_match_length) {
+                longest_match_length = len;
+                longest_match_offset = offset;
             }
         }
 
+        // Write the output
         if (flag_bit_pos == 0) {
             compressed_data[compressed_data_idx++] = flag_byte;
         }
 
-        if (longest_match_length > 5) {
+        if (longest_match_length > 2) {
             flag_byte |= (1 << flag_bit_pos);
-            compressed_data[compressed_data_idx++] = (uint8_t) longest_match_offset;
-            compressed_data[compressed_data_idx++] = (uint8_t) longest_match_length;
-            compressed_data[compressed_data_idx++] = input[idx + longest_match_length];
-            idx += longest_match_length + 1;
+            compressed_data[compressed_data_idx++] = (longest_match_offset & 0xFF00) >> 8;
+            compressed_data[compressed_data_idx++] = longest_match_offset & 0x00FF;
+            compressed_data[compressed_data_idx++] = longest_match_length;
+            idx += longest_match_length - 1;
         } else {
             flag_byte &= ~(1 << flag_bit_pos);
             compressed_data[compressed_data_idx++] = input[idx];
-            idx += 1;
         }
 
         flag_bit_pos = (flag_bit_pos + 1) % 8;
-
         if (flag_bit_pos == 0) {
             compressed_data[compressed_data_idx - 1 - 8] = flag_byte;
             flag_byte = 0;
@@ -100,12 +93,14 @@ uint8_t* compress_lz77(const char* input, int& compressed_size) {
         compressed_data[compressed_data_idx - 1 - flag_bit_pos] = flag_byte;
     }
 
-    std::cout << "\rCompressing: " << "100.00%" << std::flush << std::endl;
     compressed_size = compressed_data_idx;
-    return compressed_data;
+    uint8_t* result = new uint8_t[compressed_size];
+    memcpy(result, compressed_data.data(), compressed_size);
+    return result;
 }
-*/
 
+
+/*
 uint8_t* compress_lz77(const char* input, int& compressed_size) {
 	int input_bytes = get_buffer_size_bytes(input);
     uint8_t* compressed_data = (uint8_t*) malloc(2 * input_bytes);
@@ -167,13 +162,26 @@ uint8_t* compress_lz77(const char* input, int& compressed_size) {
 
         // If the match length is more than 5, use compression
         if (longest_match_length > 5) {
-            flag_byte |= (1 << flag_bit_pos); // Set the bit to 1 to indicate a tuple.
+			flag_byte |= (1 << flag_bit_pos); // Set the bit to 1 to indicate a tuple.
 
-            compressed_data[compressed_data_idx++] = (uint8_t) longest_match_offset;
-            compressed_data[compressed_data_idx++] = (uint8_t) longest_match_length;
-            compressed_data[compressed_data_idx++] = input[idx + longest_match_length];
+			uint16_t longest_match_offset_16 = (uint16_t) longest_match_offset;
+			uint16_t longest_match_length_16 = (uint16_t) longest_match_length;
 
-            idx += longest_match_length + 1;
+			memcpy(compressed_data + compressed_data_idx, &longest_match_offset_16, sizeof(uint16_t));
+			compressed_data_idx += sizeof(uint16_t);
+			memcpy(compressed_data + compressed_data_idx, &longest_match_length_16, sizeof(uint16_t));
+			compressed_data_idx += sizeof(uint16_t);
+
+			compressed_data[compressed_data_idx++] = input[idx + longest_match_length];
+
+			idx += longest_match_length + 1;
+            // flag_byte |= (1 << flag_bit_pos); // Set the bit to 1 to indicate a tuple.
+
+            // compressed_data[compressed_data_idx++] = (uint8_t) longest_match_offset;
+            // compressed_data[compressed_data_idx++] = (uint8_t) longest_match_length;
+            // compressed_data[compressed_data_idx++] = input[idx + longest_match_length];
+
+            // idx += longest_match_length + 1;
         } else {
             flag_byte &= ~(1 << flag_bit_pos); // Set the bit to 0 to indicate a raw byte.
 
@@ -205,3 +213,4 @@ uint8_t* compress_lz77(const char* input, int& compressed_size) {
 	std::cout << "Time taken: " << time_remaining_minutes << "m " << time_remaining_seconds % 60 << "s" << std::endl;
     return compressed_data;
 }
+*/
