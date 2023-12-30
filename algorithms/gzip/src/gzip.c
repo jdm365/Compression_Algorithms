@@ -4,7 +4,7 @@
 
 #include "gzip.h"
 
-u32 u32_hash(const u8* data, u32 size) {
+u32 u32_hash(const u8* data, int size) {
 	u32 hash = 0;
 
 	for (int idx = 0; idx < size; ++idx) {
@@ -22,9 +22,9 @@ u32 u32_hash(const u8* data, u32 size) {
 
 void u32_add_item(
 		u32_HashMap* map, 
-		const u8* key, 
-		const u32* value, 
-		u32 key_size
+		u8* key, 
+		u32 value, 
+		int key_size
 		) {
 	u32 hash = u32_hash(key, key_size);
 	
@@ -34,18 +34,19 @@ void u32_add_item(
 	map->key_sizes[hash] = key_size;
 }
 
-const u32* u32_get_item(
+u32 u32_get_item(
 		u32_HashMap* map, 
-		const u8* key, 
-		u32 key_size
+		u8* key, 
+		int key_size
 		) {
 	u32 hash = u32_hash(key, key_size);
 
-	if (*map->keys[hash] == *key) {
+	// Check if item exists in hash table
+	if (map->keys[hash] != NULL) {
 		return map->values[hash];
 	}
 
-	return NULL;
+	return UINT32_MAX;
 }
 
 void build_huffman_tree(

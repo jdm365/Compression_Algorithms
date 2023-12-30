@@ -7,7 +7,7 @@ typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-u32 u32_hash(const u8* data, u32 size);
+u32 u32_hash(const u8* data, int size);
 
 struct u32_HashMap {
 	u8** keys;
@@ -15,7 +15,8 @@ struct u32_HashMap {
 	u32* key_sizes;
 };
 
-void u32_add_item(u32_HashMap* map, const u8* key, u32 key_size);
+void u32_add_item(u32_HashMap* map, u8* key, u32 value, int key_size);
+u32  u32_get_item(u32_HashMap* map, u8* key, int key_size);
 
 void lz77_compress(
 		const u8* input_data,
