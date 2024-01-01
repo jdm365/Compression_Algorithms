@@ -1,17 +1,36 @@
 ## Makefile
-PROJECT_NAME = $(shell basename $(CURDIR))
+PROJECT_NAME = $(shell basename "$(realpath ./)")
 
+## CXX = g++
 CXX = clang++
-CXXFLAGS = -Wall -g -std=c++2a -O3 -march=native -mtune=native -stdlib=libc++
-INCLUDES = -I./include
-## LDFLAGS = -fopenmp
-SRCS = src/*.cpp
-BIN = ./bin/release/$(PROJECT_NAME)
+CXXFLAGS = -std=c++17 -Wall -g -O3
+OS = $(shell uname -s)
+ifeq ($(OS), Darwin)
+	LDFLAGS = -Xpreprocessor -fopenmp -lomp
+else
+	LDFLAGS = -fopenmp
+endif
 
+ifeq ($(CXX), clang++)
+	CXXFLAGS += -stdlib=libc++
+endif
+
+SRCS = src/*
+INCLUDES = -Iinclude
+TARGET = bin/release/$(PROJECT_NAME)
+
+## Speed up compile times
+CCFLAGS += -MMD -MP
 
 all:
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(SRCS) -o $(BIN)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CCFLAGS) $(SRCS) $(LDFLAGS) -o $(TARGET)
 
 run: all
-	$(BIN)
+	./$(TARGET)
 
+sanitize:
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CCFLAGS) $(SRCS) $(LDFLAGS) -fsanitize=address -o $(TARGET)
+	./$(TARGET)
+
+clean:
+	rm -f $(TARGET)
