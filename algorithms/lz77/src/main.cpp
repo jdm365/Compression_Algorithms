@@ -40,146 +40,210 @@ char* read_input_buffer(
 
 typedef struct {
     u8* data;
-    u64 bit_position;
+    u64 bit_index;
 } BitStream;
 
 void init_bitstream(BitStream* stream, u8* buffer) {
-    stream->data 		 = buffer;
-    stream->bit_position = 0;
+    stream->data 	  = buffer;
+    stream->bit_index = 0;
 }
 
-void write_bits(BitStream* stream, u64 value, int bit_count) {
-    for (int i = bit_count - 1; i >= 0; --i) {
-        u64 bit = (value >> i) & 1;
-        stream->data[stream->bit_position / 8] |= bit << (7 - (stream->bit_position % 8));
-        stream->bit_position++;
-    }
+void write_bit(BitStream* stream, bool bit) {
+	u64 byte_index = stream->bit_index / 8;
+	u64 bit_offset = stream->bit_index % 8;
+
+	if (bit) {
+		stream->data[byte_index] |= (1 << bit_offset);
+	}
+	else {
+		stream->data[byte_index] &= ~(1 << bit_offset);
+	}
+
+	stream->bit_index++;
 }
 
-u64 read_bits(BitStream* stream, int bit_count) {
+void write_bits(BitStream* stream, u64 value, u64 num_bits) {
+	for (u64 bit = 0; bit < num_bits; ++bit) {
+		bool is_set = value & (1 << bit);
+		write_bit(stream, is_set);
+	}
+}
+
+bool read_bit(BitStream* stream) {
+	u64 byte_index = stream->bit_index / 8;
+	u64 bit_offset = stream->bit_index % 8;
+
+	bool is_set = (stream->data[byte_index] >> bit_offset) & 1;
+	stream->bit_index++;
+
+	return is_set;
+}
+
+u64 read_bits(BitStream* stream, u64 num_bits) {
 	u64 value = 0;
-	for (int i = bit_count - 1; i >= 0; --i) {
-		u64 bit = (stream->data[stream->bit_position / 8] >> (7 - (stream->bit_position % 8))) & 1;
-		value |= bit << i;
-		stream->bit_position++;
+	for (u64 bit = 0; bit < num_bits; ++bit) {
+		if (read_bit(stream)) {
+			value |= (1 << bit);
+		}
 	}
 	return value;
 }
 
-void resize_bitstream(BitStream* stream, u64 new_size) {
-	stream->data = (u8*)realloc(stream->data, new_size);
-}
+BitStream* compress(
+		char* buffer,
+		u64 size,
+		u64 window_size
+		) {
+	BitStream* stream = (BitStream*)malloc(sizeof(BitStream));
+	u64 buffer_size = size * 2;
+	u64 buffer_index = 0;
 
+	u64 window_start = 0;
+	u64 window_end   = 0;
 
-BitStream* compress(char* buffer, u64 size, u64 window_size) {
-	u64 buffer_capacity = 1.25f * size;
+	init_bitstream(stream, (u8*)malloc(buffer_size));
 
-	BitStream* compressed_bit_stream = (BitStream*)malloc(sizeof(BitStream));
-	init_bitstream(compressed_bit_stream, (u8*)malloc(buffer_capacity));
+	while (buffer_index < size) {
+		u64 match_length = 0;
+		u64 match_offset = 0;
 
-    for (u64 idx = 0; idx < size; ++idx) {
-        u64 max_length = 0;
-        u64 max_offset = 0;
-        char next_char = buffer[idx];
+		window_start = std::max((u64)0, buffer_index - window_size);
+		window_end   = buffer_index;
 
-        // Calculate the start of the search window
-        u64 window_start = idx > window_size ? idx - window_size : 0;
+		for (u64 window_idx = window_start; window_idx < window_end; ++window_idx) {
+			u64 match_idx  = window_idx;
+			u64 buffer_idx = buffer_index;
 
-        for (u64 offset = window_start; offset < idx; ++offset) {
-            u64 length = 0;
-            while (idx + length < size && buffer[idx + length] == buffer[offset + length]) {
-                ++length;
-                if (length == window_size) {
-                    break;
-                }
-            }
+			while (buffer_idx < size && buffer[match_idx] == buffer[buffer_idx]) {
+				match_idx++;
+				buffer_idx++;
 
-			u64 current_bit_position = compressed_bit_stream->bit_position;
-			if (current_bit_position / 8 >= buffer_capacity - 24) {
-				buffer_capacity *= 2;
-				compressed_bit_stream->data = (u8*)realloc(compressed_bit_stream->data, buffer_capacity);
+				if (match_idx - window_idx > 255) {
+					match_idx--;
+					buffer_idx--;
+					break;
+				}
 			}
 
-            if (length > max_length) {
-                max_length = length;
-                max_offset = idx - offset;
-                next_char  = idx + length < size ? buffer[idx + length] : '\0';
-            }
-        }
+			u64 length = buffer_idx - buffer_index;
+			if (length > match_length) {
+				match_length = length;
+				match_offset = buffer_index - window_idx;
+			}
+		}
 
-        if (max_length > 0) {
-			write_bits(compressed_bit_stream, max_offset, 16);
-			write_bits(compressed_bit_stream, max_length, 4);
-			write_bits(compressed_bit_stream, next_char, 8);
-            idx += max_length - 1;
-        }
-        else {
-			write_bits(compressed_bit_stream, 0, 16);
-			write_bits(compressed_bit_stream, 0, 4);
-			write_bits(compressed_bit_stream, next_char, 8);
-        }
-    }
-
-	u64 final_size = compressed_bit_stream->bit_position + 7 / 8;
-	resize_bitstream(compressed_bit_stream, final_size);
-	
-	return compressed_bit_stream;
-}
-
-
-void decompress(BitStream* compressed_bit_stream, char* out_buffer, u64* out_size) {
-    u64 buffer_idx = 0;
-	u64 bit_capacity = compressed_bit_stream->bit_position;
-	printf("bit_capacity: %lu\n", bit_capacity);
-    compressed_bit_stream->bit_position = 0;
-
-    while (compressed_bit_stream->bit_position < bit_capacity) {
-        u64  offset    = read_bits(compressed_bit_stream, 16);
-        u64  length    = read_bits(compressed_bit_stream, 4);
-        char next_char = read_bits(compressed_bit_stream, 8);
-
-        if (length > 0) {
-            if (buffer_idx < offset) {
-				print_bit_string((char*)&offset, 8);
-				printf("buffer_idx: %lu, offset: %lu, length: %lu, next_char: %c\n", buffer_idx, offset, length, next_char);
-                fprintf(stderr, "Error: Invalid offset in decompression\n");
-				exit(1);
-            }
-            for (u64 idx = 0; idx < length; ++idx) {
-                out_buffer[buffer_idx++] = out_buffer[buffer_idx - offset + idx];
-            }
-        }
-        out_buffer[buffer_idx++] = next_char;
-    }
-
-    *out_size = buffer_idx;
-}
-
-bool check_buffer_equivalence(char* buffer1, char* buffer2, u64 size) {
-	for (u64 idx = 0; idx < size; ++idx) {
-		if (buffer1[idx] != buffer2[idx]) {
-			return false;
+		if (match_length > 3) {
+			write_bit(stream, 1);
+			write_bits(stream, match_offset, 16);
+			write_bits(stream, match_length, 8);
+			buffer_index += match_length;
+		}
+		else {
+			write_bit(stream, 0);
+			write_bits(stream, buffer[buffer_index], 8);
+			buffer_index++;
 		}
 	}
-	return true;
+
+	// Shrinking the buffer to the actual size
+	u64 stream_size = (stream->bit_index / 8) + 1;
+	stream->data 	= (u8*)realloc(stream->data, stream_size);
+
+	return stream;
+}
+
+char* decompress(
+		BitStream* compressed_stream,
+		u64  size,
+		u64* decompressed_size
+		) {
+	char* buffer = (char*)malloc(size);
+	u64 buffer_index = 0;
+
+	u64 total_compressed_bits = compressed_stream->bit_index;
+	compressed_stream->bit_index = 0;
+
+	while (buffer_index < size) {
+		bool is_match = read_bit(compressed_stream);
+		if (is_match) {
+			u64 match_offset = read_bits(compressed_stream, 16);
+			u64 match_length = read_bits(compressed_stream, 8);
+
+			for (u64 idx = 0; idx < match_length; ++idx) {
+				buffer[buffer_index + idx] = buffer[buffer_index - match_offset + idx];
+			}
+			buffer_index += match_length;
+		}
+		else {
+			buffer[buffer_index] = read_bits(compressed_stream, 8);
+			buffer_index++;
+		}
+	}
+
+	*decompressed_size = buffer_index;
+	return buffer;
+}
+
+
+
+bool check_buffer_equivalence(
+		char* buffer1,
+		char* buffer2,
+		u64 size
+		) {
+	u64 num_diff = 0;
+	for (u64 idx = 0; idx < size; ++idx) {
+		if (buffer1[idx] != buffer2[idx]) {
+			num_diff++;
+		}
+	}
+	printf("Number of differences: %lu\n", num_diff);
+	return (num_diff == 0);
 }
 
 
 int main() {
-	const char* FILENAME = "../../data/declaration_of_independence.txt";
-	// const char* FILENAME = "../../data/enwik8";
 	u64 filesize;
-	
+
+	// const char* FILENAME = "../../data/declaration_of_independence.txt";
+	const char* FILENAME = "../../data/enwik6";
+	// const char* FILENAME = "../../data/enwik7";
+	// const char* FILENAME = "../../data/enwik8";
+	// const char* FILENAME = "../../data/enwik9";
 	char* buffer = read_input_buffer(FILENAME, &filesize);
 
+	// const int BUFFER_SIZE = 1004232;
+	// const int BUFFER_SIZE = 800000;
+	// buffer = (char*)realloc(buffer, BUFFER_SIZE);
+	// filesize = BUFFER_SIZE;
+
+	/*
+	// const char* _buffer = "abracadabra";
+	const char* _buffer = "abracadabra alakazam";
+	char* buffer = (char*)malloc(strlen(_buffer) + 1);
+	strcpy(buffer, _buffer);
+	filesize = strlen(buffer);
+	*/
+
 	const int NUM_PRINT = std::min(100, (int)filesize);
-	const int WINDOW_SIZE = 64;
+
+	// const int WINDOW_SIZE = 4;
+	// const int WINDOW_SIZE = 8;
+	// const int WINDOW_SIZE = 16;
+	// const int WINDOW_SIZE = 32;
+	// const int WINDOW_SIZE = 64;
 	// const int WINDOW_SIZE = 256;
+	// const int WINDOW_SIZE = 1024;
+	// const int WINDOW_SIZE = 2048;
+	// const int WINDOW_SIZE = 3156;
 	// const int WINDOW_SIZE = 4096;
+	// const int WINDOW_SIZE = 8192;
+	// const int WINDOW_SIZE = 16384;
 	// const int WINDOW_SIZE = 32768;
-	// const int WINDOW_SIZE = 65535;
+	const int WINDOW_SIZE = 65535;
 	
 	printf("Contents of file:    ");
+	// for (u64 idx = 0; idx < filesize; ++idx) {
 	for (u64 idx = 0; idx < NUM_PRINT; ++idx) {
 		printf("%c", buffer[idx]);
 	}
@@ -189,22 +253,24 @@ int main() {
 	clock_t start = clock();
 
 	BitStream* compressed_buffer = compress(buffer, filesize, WINDOW_SIZE);
+	u64 compressed_bytes = compressed_buffer->bit_index / 8;
 
-	// u64 compressed_bytes = compressed_buffer->bit_position / 8 + 1;
-	u64 compressed_bytes = compressed_buffer->bit_position / 8;
-
+	/*
 	printf("Compressed buffer:   ");
 	for (u64 idx = 0; idx < NUM_PRINT; ++idx) {
 		printf("%c", compressed_buffer->data[idx]);
 	}
 	printf("\n\n");
+	*/
 
-	char* decompressed_buffer = (char*)malloc(filesize);
-	u64   decompressed_size;
+	u64   decompressed_size = filesize;
+	printf("FILESIZE:   %lu\n", decompressed_size);
+	printf("COMPRESSED: %lu\n", compressed_bytes);
+	char* decompressed_buffer = decompress(compressed_buffer, filesize, &decompressed_size);
 
-	decompress(compressed_buffer, decompressed_buffer, &decompressed_size);
 	printf("Decompressed buffer: ");
-	for (u64 idx = 0; idx < filesize; ++idx) {
+	for (u64 idx = 0; idx < NUM_PRINT; ++idx) {
+	// for (u64 idx = 0; idx < filesize; ++idx) {
 		printf("%c", decompressed_buffer[idx]);
 	}
 	printf("\n\n");
@@ -222,7 +288,7 @@ int main() {
 	printf("Uncompressed size:  %lu\n", filesize);
 	printf("Compressed size:    %lu\n", compressed_bytes);
 	printf("Reconstructed size: %lu\n", decompressed_size);
-	printf("Compression ratio:  %f\n",  (double)compressed_bytes / (double)filesize);
+	printf("Compression ratio:  %f\n",  (double)filesize / compressed_bytes);
 	printf("Total time:         %fs\n", (double)(clock() - start) / CLOCKS_PER_SEC);
 	printf("========================================================================\n");
 

@@ -7,6 +7,7 @@
       "-Wall",
       "-g",
       "-O3",
+      "-Wno-unused-variable",
       "-stdlib=libc++",
       "-Iinclude",
       "-fopenmp",
@@ -74,6 +75,7 @@
       "/usr/include",
       "-O3",
       "-Wall",
+      "-Wno-unused-variable",
       "-std=c++17",
       "-fdeprecated-macro",
       "-fdebug-compilation-dir=/home/jdm365/CompressionAlgorithms/algorithms/lz77",
@@ -91,11 +93,11 @@
       "-x",
       "c++",
       "-o",
-      "/tmp/main-d08154.o",
+      "/tmp/main-b7464d.o",
       "src/main.cpp"
     ],
     "directory": "/home/jdm365/CompressionAlgorithms/algorithms/lz77",
     "file": "/home/jdm365/CompressionAlgorithms/algorithms/lz77/src/main.cpp",
-    "output": "/tmp/main-d08154.o"
+    "output": "/tmp/main-b7464d.o"
   }
 ]
