@@ -1,8 +1,8 @@
 ## Makefile
 PROJECT_NAME = $(shell basename "$(realpath ./)")
 
-## CXX = g++
-CXX = clang++
+CXX = g++
+## CXX = clang++
 CXXFLAGS = -std=c++17 -Wall -g -O3 -Wno-unused-variable
 OS = $(shell uname -s)
 ifeq ($(OS), Darwin)
