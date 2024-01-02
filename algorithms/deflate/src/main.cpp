@@ -13,18 +13,31 @@ bool gzipCompress(
     stream.zfree = Z_NULL;
     stream.opaque = Z_NULL;
 
-    // Initialize for gzip compression
     if (deflateInit2(
 				&stream, 
-				Z_DEFAULT_COMPRESSION, 
+				Z_BEST_COMPRESSION,
 				Z_DEFLATED, 
-				MAX_WBITS + 16, 
+				MAX_WBITS + 16,
 				8, 
 				Z_DEFAULT_STRATEGY
 				) != Z_OK
 			) {
         return false;
     }
+	/*
+	// Fastest compression
+	if (deflateInit2(
+				&stream,
+				Z_BEST_SPEED,
+				Z_DEFLATED,
+				MAX_WBITS + 16,
+				8,
+				Z_DEFAULT_STRATEGY
+				) != Z_OK
+			) {
+		return false;
+	}
+	*/
 
     stream.avail_in = inputData.size();
     stream.next_in = const_cast<Bytef*>(inputData.data());
@@ -48,7 +61,10 @@ bool gzipCompress(
 }
 
 int main(int argc, char* argv[]) {
-	const char* FILENAME = "../../data/enwik9";
+	// const char* FILENAME = "../../data/enwik6";
+	// const char* FILENAME = "../../data/enwik7";
+	const char* FILENAME = "../../data/enwik8";
+	// const char* FILENAME = "../../data/enwik9";
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
 
     std::ifstream inputFile(FILENAME, std::ios::binary);
@@ -76,6 +92,9 @@ int main(int argc, char* argv[]) {
         std::cerr << "Compression failed" << std::endl;
         return 1;
     }
+
+	// Delete output.gz
+	std::remove("output.gz");
 
     return 0;
 }
