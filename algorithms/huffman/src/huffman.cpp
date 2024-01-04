@@ -119,6 +119,55 @@ void print_codes(
 	}
 }
 
+inline void write_bit(
+		char* buffer,
+		u64* byte_idx,
+		u8*  bit_idx,
+		bool bit
+		) {
+	buffer[*byte_idx] |= (bit << (*bit_idx));
+	*bit_idx = (*bit_idx + 1) % 8;
+	*byte_idx += (*bit_idx == 0);
+}
+
+inline bool read_bit(
+		char* buffer,
+		u64* byte_idx,
+		u8*  bit_idx
+		) {
+	bool bit = buffer[*byte_idx] & (1 << *bit_idx);
+	*bit_idx = (*bit_idx + 1) % 8;
+	*byte_idx += (*bit_idx == 0);
+	return bit;
+}
+
+void write_bits(
+		char* buffer,
+		u64* byte_idx,
+		u8*  bit_idx,
+		u32 code,
+		u32 length
+		) {
+	for (u32 idx = 0; idx < length; ++idx) {
+		bool bit = (code >> idx) & 1;
+		write_bit(buffer, byte_idx, bit_idx, bit);
+	}
+}
+
+u64 read_bits(
+		char* buffer,
+		u64* byte_idx,
+		u8*  bit_idx,
+		u32 length
+		) {
+	u64 code = 0;
+	for (u32 idx = 0; idx < length; ++idx) {
+		bool bit = read_bit(buffer, byte_idx, bit_idx);
+		code |= (bit << idx);
+	}
+	return code;
+}
+
 void huffman_compress(
 		char* buffer,
 		u64   size,
@@ -136,12 +185,7 @@ void huffman_compress(
 		u32 code   = codes[(u8)buffer[idx]];
 		u32 length = code_lengths[(u8)buffer[idx]];
 
-		for (u32 idx = 0; idx < length; ++idx) {
-			bool bit = (code >> idx) & 1;
-			output[byte_idx] |= (bit << (bit_idx));
-			bit_idx = (bit_idx + 1) % 8;
-			byte_idx += (bit_idx == 0);
-		}
+		write_bits(output, &byte_idx, &bit_idx, code, length);
 	}
 
 	*output_size = byte_idx + (bit_idx > 0);

@@ -9,8 +9,8 @@ int main() {
 	u64 filesize;
 
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
-	// const char* FILENAME = "../../data/enwik6";
-	const char* FILENAME = "../../data/enwik7";
+	const char* FILENAME = "../../data/enwik6";
+	// const char* FILENAME = "../../data/enwik7";
 	// const char* FILENAME = "../../data/enwik8";
 	// const char* FILENAME = "../../data/enwik9";
 	char* buffer = read_input_buffer(FILENAME, &filesize);
@@ -19,13 +19,6 @@ int main() {
 
 	const u8 LENGTH_BITS = 5;
 	const u8 WINDOW_BITS = 12;
-	
-	printf("Contents of file:    ");
-	// for (u64 idx = 0; idx < filesize; ++idx) {
-	for (u64 idx = 0; idx < NUM_PRINT; ++idx) {
-		printf("%c", buffer[idx]);
-	}
-	printf("\n\n");
 
 	// Time the compression
 	clock_t start = clock();
@@ -56,7 +49,7 @@ int main() {
 	}
 
 	printf("========================================================================\n");
-	printf("============================ LZ77 ======================================\n");
+	printf("============================== LZ77 ====================================\n");
 	printf("========================================================================\n");
 	printf("Uncompressed size:  %lu\n", filesize);
 	printf("Compressed size:    %lu\n", compressed_bytes);

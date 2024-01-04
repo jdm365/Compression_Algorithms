@@ -20,10 +20,10 @@ bool compare_buffers(
 
 int main() {
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
-	// const char* FILENAME = "../../data/enwik6";
+	const char* FILENAME = "../../data/enwik6";
 	// const char* FILENAME = "../../data/enwik7";
 	// const char* FILENAME = "../../data/enwik8";
-	const char* FILENAME = "../../data/enwik9";
+	// const char* FILENAME = "../../data/enwik9";
 	u64 filesize;
 
 	char* buffer = read_input_buffer(FILENAME, &filesize);
@@ -49,6 +49,7 @@ int main() {
 			compressed_buffer,
 			&compressed_bytes
 			);
+
 	// Resize output buffer
 	compressed_buffer = (char*)realloc(compressed_buffer, compressed_bytes);
 
@@ -62,23 +63,6 @@ int main() {
 			&decompressed_bytes
 			);
 	decompressed_buffer = (char*)realloc(decompressed_buffer, decompressed_bytes);
-
-	/*
-	const int NUM_PRINT = std::min((u64)100, filesize);
-	printf("\n\n");
-
-	printf("Initial: ");
-	for (u64 idx = 0; idx < NUM_PRINT; ++idx) {
-		printf("%c", buffer[idx]);
-	}
-	printf("\n\n");
-
-	printf("Final:   ");
-	for (u64 idx = 0; idx < NUM_PRINT; ++idx) {
-		printf("%c", decompressed_buffer[idx]);
-	}
-	printf("\n\n");
-	*/
 
 	if (compare_buffers(buffer, decompressed_buffer, filesize)) {
 		printf("SUCCESS\n");
