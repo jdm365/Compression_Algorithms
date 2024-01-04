@@ -20,8 +20,14 @@ SRCS = src/*
 INCLUDES = -Iinclude
 TARGET = bin/release/$(PROJECT_NAME)
 
+MEMFLAGS = -fsanitize=address -fno-omit-frame-pointer
+
 all:
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(SRCS) $(LDFLAGS) -o $(TARGET)
+
+sanitize:
+	$(CXX) $(CXXFLAGS) $(MEMFLAGS) $(INCLUDES) $(CCFLAGS) $(SRCS) $(LDFLAGS) -o $(TARGET)
+	./$(TARGET)
 
 run: all
 	./$(TARGET)
