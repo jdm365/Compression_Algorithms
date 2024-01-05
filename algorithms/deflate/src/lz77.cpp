@@ -86,7 +86,7 @@ BitStream* lz77_compress(
 				match_idx++;
 				buffer_idx++;
 
-				if (match_idx - window_idx > pow(2, length_bits) - 1) {
+				if (match_idx - window_idx > window_size) {
 					match_idx--;
 					buffer_idx--;
 					break;

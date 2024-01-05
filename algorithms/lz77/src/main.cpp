@@ -18,7 +18,7 @@ int main() {
 	const u64 NUM_PRINT = std::min(100, (int)filesize);
 
 	const u8 LENGTH_BITS = 5;
-	const u8 WINDOW_BITS = 12;
+	const u8 WINDOW_BITS = 10;
 
 	// Time the compression
 	clock_t start = clock();
@@ -51,9 +51,9 @@ int main() {
 	printf("========================================================================\n");
 	printf("============================== LZ77 ====================================\n");
 	printf("========================================================================\n");
-	printf("Uncompressed size:  %lu\n", filesize);
-	printf("Compressed size:    %lu\n", compressed_bytes);
-	printf("Reconstructed size: %lu\n", decompressed_size);
+	printf("Uncompressed size:  %llu\n", filesize);
+	printf("Compressed size:    %llu\n", compressed_bytes);
+	printf("Reconstructed size: %llu\n", decompressed_size);
 	printf("Compression ratio:  %f\n",  (double)filesize / compressed_bytes);
 	printf("Total time:         %fs\n", (double)(clock() - start) / CLOCKS_PER_SEC);
 	printf("========================================================================\n");

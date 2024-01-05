@@ -182,7 +182,7 @@ char* lz77_decompress(
 bool check_buffer_equivalence(
 		char* buffer1,
 		char* buffer2,
-		u64 size
+		u64   size
 		) {
 	u64 num_diff = 0;
 	for (u64 idx = 0; idx < size; ++idx) {
@@ -190,6 +190,6 @@ bool check_buffer_equivalence(
 			num_diff++;
 		}
 	}
-	printf("Number of differences: %lu\n", num_diff);
+	printf("Number of differences: %llu\n", num_diff);
 	return (num_diff == 0);
 }

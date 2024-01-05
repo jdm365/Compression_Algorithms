@@ -391,11 +391,13 @@ LZSSTrees huffman_compress_lzss_data(
 	u32 lzss_code_lengths[65536]  = {0};
 	gather_codes(*trees.root_offsets, 0, 0, lzss_codes, lzss_code_lengths);
 
+	/*
 	printf("Literals:\n");
 	print_codes(literal_codes, literal_code_lengths, 256);
 
 	printf("\nOffsets:\n");
 	print_codes(lzss_codes, lzss_code_lengths, 65536);
+	*/
 
 	// Reread the bitstream and compress the data using the huffman trees.
 	stream->bit_index = 0;

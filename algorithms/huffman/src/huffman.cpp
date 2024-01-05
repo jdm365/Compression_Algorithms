@@ -168,28 +168,57 @@ u64 read_bits(
 	return code;
 }
 
-void huffman_compress(
+void _huffman_compress(
 		char* buffer,
 		u64   size,
 		u32*  codes,
 		u32*  code_lengths,
-		char* output,
-		u64*  output_size
+		char* compressed_buffer,
+		u64*  compressed_bytes 
 		) {
 	u64 byte_idx = 0;
 	u8  bit_idx  = 0;
 
-	memset(output, 0, size);
+	memset(compressed_buffer, 0, size);
 
 	for (u64 idx = 0; idx < size; ++idx) {
 		u32 code   = codes[(u8)buffer[idx]];
 		u32 length = code_lengths[(u8)buffer[idx]];
 
-		write_bits(output, &byte_idx, &bit_idx, code, length);
+		write_bits(compressed_buffer, &byte_idx, &bit_idx, code, length);
 	}
 
-	*output_size = byte_idx + (bit_idx > 0);
+	*compressed_bytes = byte_idx + (bit_idx > 0);
 }
+
+Node huffman_compress(
+		char* buffer,
+		u64   size,
+		char* compressed_buffer,
+		u64*  compressed_bytes
+		) {
+	Node root(0, 0);
+	build_huffman_tree(buffer, size, root);
+
+	u32 codes[256]        = {0};
+	u32 code_lengths[256] = {0};
+	gather_codes(root, 0, 0, codes, code_lengths);
+
+	_huffman_compress(
+			buffer,
+			size,
+			codes,
+			code_lengths,
+			compressed_buffer,
+			compressed_bytes
+			);
+
+	compressed_buffer = (char*)realloc(compressed_buffer, *compressed_bytes);
+
+	return root;
+}
+
+
 
 void huffman_decompress(
 		char* compressed_buffer,

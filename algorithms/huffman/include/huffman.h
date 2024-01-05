@@ -51,13 +51,19 @@ void  gather_codes(
 		u32* code_lengths
 		);
 void  print_codes(u32* codes, u32* code_lengths);
-void  huffman_compress(
+void  _huffman_compress(
 		char* buffer,
 		u64   size,
 		u32*  codes,
 		u32*  code_lengths,
 		char* output,
 		u64*  output_size
+		);
+Node  huffman_compress(
+		char* buffer,
+		u64   size,
+		char* compressed_buffer,
+		u64*  compressed_bytes 
 		);
 void  huffman_decompress(
 		char* compressed_buffer,

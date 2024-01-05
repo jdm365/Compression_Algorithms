@@ -32,26 +32,9 @@ int main() {
 
 	clock_t start = clock();
 
-	Node root(0, 0);
-	build_huffman_tree(buffer, filesize, root);
-
-	u32 codes[256] = {0};
-	u32 code_lengths[256] = {0};
-	gather_codes(root, 0, 0, codes, code_lengths);
-
 	char* compressed_buffer = (char*)malloc(filesize);
-	u64   compressed_bytes = 0;
-	huffman_compress(
-			buffer, 
-			filesize, 
-			codes,
-			code_lengths,
-			compressed_buffer,
-			&compressed_bytes
-			);
-
-	// Resize output buffer
-	compressed_buffer = (char*)realloc(compressed_buffer, compressed_bytes);
+	u64   compressed_bytes;
+	Node root = huffman_compress(buffer, filesize, compressed_buffer, &compressed_bytes);
 
 	char* decompressed_buffer = (char*)malloc(filesize);
 	u64   decompressed_bytes  = filesize;
@@ -74,9 +57,9 @@ int main() {
 	printf("========================================================================\n");
 	printf("============================ HUFFMAN ===================================\n");
 	printf("========================================================================\n");
-	printf("Uncompressed size:  %lu\n", filesize);
-	printf("Compressed size:    %lu\n", compressed_bytes);
-	printf("Reconstructed size: %lu\n", decompressed_bytes);
+	printf("Uncompressed size:  %llu\n", filesize);
+	printf("Compressed size:    %llu\n", compressed_bytes);
+	printf("Reconstructed size: %llu\n", decompressed_bytes);
 	printf("Compression ratio:  %f\n",  (double)filesize / compressed_bytes);
 	printf("Total time:         %fs\n", (double)(clock() - start) / CLOCKS_PER_SEC);
 	printf("========================================================================\n");

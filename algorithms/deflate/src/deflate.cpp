@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "lz77.h"
 #include "huffman.h"
@@ -13,11 +14,16 @@ StateData deflate_compress(
 		) {
 	StateData state_data;
 
+	clock_t start = clock();
+
 	BitStream* bit_stream = lz77_compress(data, size, window_bits, length_bits);
 
 	state_data.lz77_compressed_size = bit_stream->bit_index / 8;
 	char* huffman_compressed_data = (char*)malloc(state_data.lz77_compressed_size);
 	printf("LZ77_compressed_size: %lu\n", state_data.lz77_compressed_size);
+
+	printf("LZ77 compression time: %f\n", (double)(clock() - start) / CLOCKS_PER_SEC);
+	start = clock();
 
 	char* output_buffer = (char*)malloc(state_data.lz77_compressed_size);
 	u64   output_size   = state_data.lz77_compressed_size;
@@ -31,6 +37,7 @@ StateData deflate_compress(
 			length_bits
 			);
 	printf("Huffman_compressed_size: %lu\n", output_size);
+	printf("Huffman compression time: %f\n", (double)(clock() - start) / CLOCKS_PER_SEC);
 	exit(0);
 
 	state_data.huffman_compressed_data = huffman_compressed_data;
