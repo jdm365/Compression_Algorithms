@@ -18,13 +18,15 @@ int main() {
 	const u64 NUM_PRINT = std::min(100, (int)filesize);
 
 	const u8 LENGTH_BITS = 5;
-	const u8 WINDOW_BITS = 10;
+	const u8 WINDOW_BITS = 12;
 
 	// Time the compression
 	clock_t start = clock();
 
 	BitStream* compressed_buffer = lz77_compress(buffer, filesize, WINDOW_BITS, LENGTH_BITS);
 	u64 compressed_bytes = compressed_buffer->bit_index / 8;
+
+	printf("Compression MB/s: %f\n", (double)filesize / (double)(clock() - start) * CLOCKS_PER_SEC / (1024.0 * 1024.0));
 
 	u64   decompressed_size = filesize;
 	char* decompressed_buffer = lz77_decompress(

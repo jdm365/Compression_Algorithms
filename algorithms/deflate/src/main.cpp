@@ -100,7 +100,7 @@ void custom_test(const char* filename) {
 
 	printf("File size uncompressed: %d\n", (int)filesize);
 
-	const int LENGTH_BITS = 4; 
+	const int LENGTH_BITS = 6; 
 	const int WINDOW_BITS = 12;
 
 	clock_t start = clock();
@@ -145,8 +145,8 @@ void custom_test(const char* filename) {
 }
 
 int main(int argc, char* argv[]) {
-	const char* FILENAME = "../../data/enwik6";
-	// const char* FILENAME = "../../data/enwik7";
+	// const char* FILENAME = "../../data/enwik6";
+	const char* FILENAME = "../../data/enwik7";
 	// const char* FILENAME = "../../data/enwik8";
 	// const char* FILENAME = "../../data/enwik9";
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";

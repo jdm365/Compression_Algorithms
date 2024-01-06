@@ -12,6 +12,18 @@ typedef struct {
     u64 bit_index;
 } BitStream;
 
+inline u32 char_hash(char* str, u32 mod_val = 1) {
+	return (((u32)str[0] << 16) | ((u32)str[1] << 8) | (u32)str[2]) % mod_val;
+}
+
+/*
+typedef struct {
+	u32* index;
+	u32  idx_ptr;
+	u32  size;
+} HashTable;
+*/
+
 void  print_bit_string(char* buffer, u64 size);
 char* read_input_buffer(const char* filename, u64* size);
 void  init_bitstream(BitStream* stream, u8* buffer);

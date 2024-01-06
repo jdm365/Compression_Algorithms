@@ -20,10 +20,10 @@ bool compare_buffers(
 
 int main() {
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
-	const char* FILENAME = "../../data/enwik6";
+	// const char* FILENAME = "../../data/enwik6";
 	// const char* FILENAME = "../../data/enwik7";
 	// const char* FILENAME = "../../data/enwik8";
-	// const char* FILENAME = "../../data/enwik9";
+	const char* FILENAME = "../../data/enwik9";
 	u64 filesize;
 
 	char* buffer = read_input_buffer(FILENAME, &filesize);
@@ -35,6 +35,7 @@ int main() {
 	char* compressed_buffer = (char*)malloc(filesize);
 	u64   compressed_bytes;
 	Node root = huffman_compress(buffer, filesize, compressed_buffer, &compressed_bytes);
+	printf("Compression MB/s: %f\n", (double)filesize / (double)(clock() - start) * CLOCKS_PER_SEC / (1024.0 * 1024.0));
 
 	char* decompressed_buffer = (char*)malloc(filesize);
 	u64   decompressed_bytes  = filesize;

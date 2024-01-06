@@ -432,7 +432,6 @@ LZSSTrees huffman_compress_lzss_data(
 					);
 			lzss_idx++;
 
-			// printf("LZSS Buffer value: %u;    LZSS index: %lu\n", lzss_buffer[lzss_idx], lzss_idx);
 			write_bits(
 					output,
 					&byte_index,
@@ -444,13 +443,12 @@ LZSSTrees huffman_compress_lzss_data(
 		}
 		else {
 			if (literal_idx >= literal_buffer_size) {
-				printf("Literal index: %lu\n", literal_idx);
-				printf("Literal buffer size: %lu\n", literal_buffer_size);
-				printf("LZSS index: %lu\n", lzss_idx);
-				printf("LZSS buffer size: %lu\n", lzss_buffer_size);
+				printf("Literal index: %llu\n", literal_idx);
+				printf("Literal buffer size: %llu\n", literal_buffer_size);
+				printf("LZSS index: %llu\n", lzss_idx);
+				printf("LZSS buffer size: %llu\n", lzss_buffer_size);
 				exit(0);
 			}
-			// printf("Literal Buffer value: %u;    Literal index: %lu;    Literal size: %lu\n", literal_buffer[literal_idx], literal_idx, literal_buffer_size);
 			write_bits(
 					output, 
 					&byte_index, 
@@ -478,4 +476,6 @@ void  huffman_decompress_lzss_data(
 		LZSSTrees trees,
 		char* output,
 		u64* output_size
-		) {}
+		) {
+
+}

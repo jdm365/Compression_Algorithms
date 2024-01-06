@@ -94,6 +94,8 @@ BitStream* lz77_compress(
 	u64 window_start = 0;
 	u64 window_end   = 0;
 
+	HashTable hash_table;
+
 	init_bitstream(stream, (u8*)malloc(buffer_size));
 
 	while (buffer_index < size) {

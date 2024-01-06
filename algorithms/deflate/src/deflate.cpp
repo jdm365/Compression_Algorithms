@@ -23,6 +23,7 @@ StateData deflate_compress(
 	printf("LZ77_compressed_size: %lu\n", state_data.lz77_compressed_size);
 
 	printf("LZ77 compression time: %f\n", (double)(clock() - start) / CLOCKS_PER_SEC);
+	printf("LZ77 MB/s: %f\n", (double)size / (1024 * 1024) / ((double)(clock() - start) / CLOCKS_PER_SEC));
 	start = clock();
 
 	char* output_buffer = (char*)malloc(state_data.lz77_compressed_size);
@@ -36,17 +37,18 @@ StateData deflate_compress(
 			window_bits,
 			length_bits
 			);
-	printf("Huffman_compressed_size: %lu\n", output_size);
+	printf("Huffman_compressed_size: %llu\n", output_size);
 	printf("Huffman compression time: %f\n", (double)(clock() - start) / CLOCKS_PER_SEC);
-	exit(0);
+	printf("Huffman MB/s: %f\n", (double)output_size / (1024 * 1024) / ((double)(clock() - start) / CLOCKS_PER_SEC));
 
-	state_data.huffman_compressed_data = huffman_compressed_data;
+	state_data.huffman_compressed_data = output_buffer;
 	state_data.huffman_compressed_size = output_size;
-	// state_data.huffman_root 		   = &huffman_root;
-
+	state_data.huffman_trees 		   = &trees;
 
 	free(bit_stream->data);
 	free(bit_stream);
+	free(output_buffer);
+	free(data);
 
 	return state_data;
 }
@@ -61,10 +63,10 @@ char* deflate_decompress(
 	u64   huffman_decompressed_size = state_data.lz77_compressed_size;
 	char* huffman_compressed_data = (char*)malloc(huffman_decompressed_size);
 
-	huffman_decompress(
+	huffman_decompress_lzss_data(
 			state_data.huffman_compressed_data,
 			state_data.huffman_compressed_size,
-			*state_data.huffman_root,
+			*state_data.huffman_trees,
 			huffman_compressed_data,
 			&huffman_decompressed_size
 			);

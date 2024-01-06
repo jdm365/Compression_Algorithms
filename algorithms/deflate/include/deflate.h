@@ -7,7 +7,7 @@ typedef struct StateData {
 	u64        lz77_compressed_size;
 	char*      huffman_compressed_data;
 	u64        huffman_compressed_size;
-	Node*      huffman_root;
+	LZSSTrees* huffman_trees;
 } StateData;
 
 StateData deflate_compress(
