@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <queue>
 
@@ -119,43 +120,6 @@ void build_huffman_tree(
 	*root = queue.top();
 }
 
-
-void gather_codes(
-		Node* root,
-		uint32_t code,
-		uint32_t length,
-		uint32_t* codes,
-		uint32_t* code_lengths
-		) {
-	if (root->left == nullptr && root->right == nullptr) {
-		codes[root->value] 	   = code;
-		code_lengths[root->value] = length;
-		return;
-	}
-
-	if (root->left != nullptr) {
-		gather_codes(
-				root->left, 
-				// code,
-				code << 1,
-				length + 1, 
-				codes, 
-				code_lengths
-				);
-	}
-
-	if (root->right != nullptr) {
-		gather_codes(
-				root->right, 
-				// code | (1 << length),
-				(code << 1) + 1,
-				length + 1, 
-				codes, 
-				code_lengths
-				);
-	}
-}
-
 void gather_codes(
 		Node* root,
 		uint32_t code,
@@ -193,21 +157,6 @@ void gather_codes(
 
 void print_codes(
 		uint32_t* codes,
-		uint32_t* code_lengths
-		) {
-	for (uint32_t idx = 0; idx < 256; ++idx) {
-		if (code_lengths[idx] > 0) {
-			printf("%c: ", (char)idx);
-			for (uint32_t bit_idx = 0; bit_idx < code_lengths[idx]; ++bit_idx) {
-				printf("%d", (codes[idx] >> (code_lengths[idx] - bit_idx - 1)) & 1);
-			}
-			printf("\n");
-		}
-	}
-}
-
-void print_codes(
-		uint32_t* codes,
 		uint8_t* code_lengths
 		) {
 	for (uint32_t idx = 0; idx < 256; ++idx) {
@@ -221,167 +170,7 @@ void print_codes(
 	}
 }
 
-inline void write_bit(
-		char* buffer,
-		uint64_t* byte_idx,
-		uint8_t*  bit_idx,
-		bool bit
-		) {
-	buffer[*byte_idx] |= (bit << (*bit_idx));
-	*bit_idx = (*bit_idx + 1) % 8;
-	*byte_idx += (*bit_idx == 0);
-}
-
-inline bool read_bit(
-		char* buffer,
-		uint64_t* byte_idx,
-		uint8_t*  bit_idx
-		) {
-	bool bit = buffer[*byte_idx] & (1 << *bit_idx);
-	*bit_idx = (*bit_idx + 1) % 8;
-	*byte_idx += (*bit_idx == 0);
-	return bit;
-}
-
-/*
-void write_bits(
-		char* buffer,
-		uint64_t* byte_idx,
-		uint8_t*  bit_idx,
-		uint32_t code,
-		uint32_t length
-		) {
-	for (uint32_t idx = 0; idx < length; ++idx) {
-		bool bit = (code >> idx) & 1;
-		write_bit(buffer, byte_idx, bit_idx, bit);
-	}
-}
-*/
-static inline void write_bits_v1(
-    uint8_t* buffer,
-    uint64_t* byte_idx,
-    uint8_t* bit_idx,
-    uint32_t code,
-    uint32_t length
-) {
-    uint64_t idx = *byte_idx * 8 + *bit_idx;
-    for (uint32_t i = 0; i < length; ++i, ++idx) {
-        buffer[idx / 8] = (buffer[idx / 8] & ~(1 << (idx % 8))) | (((code >> i) & 1) << (idx % 8));
-    }
-    *byte_idx = idx / 8;
-    *bit_idx = idx % 8;
-}
-
-
-uint64_t read_bits(
-		char* buffer,
-		uint64_t* byte_idx,
-		uint8_t*  bit_idx,
-		uint32_t length
-		) {
-	uint64_t code = 0;
-	for (uint32_t idx = 0; idx < length; ++idx) {
-		bool bit = read_bit(buffer, byte_idx, bit_idx);
-		code |= (bit << idx);
-	}
-	return code;
-}
-
 void _huffman_compress(
-		char* buffer,
-		uint64_t   size,
-		uint32_t*  codes,
-		uint32_t*  code_lengths,
-		uint8_t* compressed_buffer,
-		uint64_t*  compressed_bytes 
-		) {
-	uint64_t byte_idx = 0;
-	uint8_t  bit_idx  = 0;
-
-	memset(compressed_buffer, 0, size);
-
-	for (uint64_t idx = 0; idx < size; ++idx) {
-		uint32_t code   = codes[(uint8_t)buffer[idx]];
-		uint32_t length = code_lengths[(uint8_t)buffer[idx]];
-
-		if (length == 0) {
-			printf("ERROR: No code for character %c\n", buffer[idx]);
-			exit(1);
-		}
-
-		write_bits_v1(compressed_buffer, &byte_idx, &bit_idx, code, length);
-	}
-
-	*compressed_bytes = byte_idx + (bit_idx > 0);
-}
-
-
-Node huffman_compress(
-		char* buffer,
-		uint64_t   size,
-		uint8_t* compressed_buffer,
-		uint64_t*  compressed_bytes
-		) {
-	Node* root = nullptr;
-	root = new Node(0, 0);
-	build_huffman_tree(buffer, size, &root);
-
-	uint32_t codes[256]        = {0};
-	uint32_t code_lengths[256] = {0};
-	gather_codes(root, 0, 0, codes, code_lengths);
-
-	// print_codes(codes, code_lengths);
-
-	_huffman_compress(
-			buffer,
-			size,
-			codes,
-			code_lengths,
-			compressed_buffer,
-			compressed_bytes
-			);
-
-	compressed_buffer = (uint8_t*)realloc(compressed_buffer, *compressed_bytes);
-
-	return *root;
-}
-
-void huffman_decompress(
-		uint8_t* compressed_buffer,
-		uint64_t compressed_size,
-		Node& root,
-		char* output,
-		uint64_t* output_size
-		) {
-	uint64_t char_idx = 0;
-	uint64_t byte_idx = 0;
-	uint8_t  bit_idx  = 0;
-
-	memset(output, 0, *output_size);
-
-	do {
-		Node* node = &root;
-		while (node->left != nullptr && node->right != nullptr) {
-			if (compressed_buffer[byte_idx] & (1 << bit_idx)) {
-				node = node->right;
-			} else {
-				node = node->left;
-			}
-			bit_idx = (bit_idx + 1) % 8;
-			byte_idx += (bit_idx == 0);
-		}
-
-		output[char_idx] = node->value;
-		++char_idx;
-	} while (byte_idx < compressed_size);
-
-	*output_size = char_idx - (bit_idx > 0);
-}
-
-
-
-
-void _huffman_compress_v2(
 		char* buffer,
 		uint64_t   size,
 		uint32_t*  codes,
@@ -402,7 +191,7 @@ void _huffman_compress_v2(
 }
 
 
-Node huffman_compress_v2(
+Node huffman_compress(
 		char* buffer,
 		uint64_t   size,
 		BitWriter* bit_writer
@@ -417,7 +206,16 @@ Node huffman_compress_v2(
 	uint8_t  code_lengths[256] = {0};
 	gather_codes(root, 0, 0, codes, code_lengths);
 
-	_huffman_compress_v2(
+	// Print max length
+	uint8_t max_length = 0;
+	for (uint32_t idx = 0; idx < 256; ++idx) {
+		if (code_lengths[idx] > max_length) {
+			max_length = code_lengths[idx];
+		}
+	}
+	// printf("Max length: %d\n", max_length);
+
+	_huffman_compress(
 			buffer,
 			size,
 			codes,
@@ -436,7 +234,7 @@ Node huffman_compress_v2(
 	return *root;
 }
 
-void huffman_decompress_v2(
+void huffman_decompress(
         BitWriter* writer,
         Node& root,
         char* output,
@@ -469,5 +267,42 @@ void huffman_decompress_v2(
         output[char_idx++] = node->value;
     } while (byte_idx < writer->buffer_size);
 
-    *output_size = char_idx - (bit_idx != 0);
+    *output_size = char_idx;
+}
+
+void huffman_decompress_lookup_table(
+        BitWriter* writer,
+        Node& root,
+        char* output,
+        uint64_t* output_size
+        ) {
+	uint32_t lookup_table[256] = {0};
+	uint8_t  lookup_table_lengths[256] = {0};
+	gather_codes(&root, 0, 0, lookup_table, lookup_table_lengths);
+
+    uint64_t char_idx = 0;
+    uint64_t word_idx = 0;
+
+    memset(output, 0, *output_size);
+
+    do {
+		uint32_t current_word = writer->buffer[word_idx];
+		uint32_t mask = 0x80000000;
+		for (uint8_t idx = 0; idx < 32; ++idx) {
+			uint32_t word = current_word & mask;
+			uint32_t code = lookup_table[word];
+			uint8_t  length = lookup_table_lengths[word];
+
+			if (length == 0) {
+				printf("ERROR: No code for word %d\n", word);
+				exit(1);
+			}
+
+			write_bits(writer, code, length);
+			mask >>= 1;
+		}
+		++word_idx;
+	} while (word_idx < writer->buffer_size);
+	
+	*output_size = char_idx;
 }

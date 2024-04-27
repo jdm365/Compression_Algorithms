@@ -87,53 +87,29 @@ void  gather_codes(
 		uint32_t code,
 		uint32_t length,
 		uint32_t* codes,
-		uint32_t* code_lengths
-		);
-void  gather_codes(
-		Node* root,
-		uint32_t code,
-		uint32_t length,
-		uint32_t* codes,
 		uint8_t*  code_lengths
 		);
-void  print_codes(uint32_t* codes, uint32_t* code_lengths);
 void  print_codes(uint32_t* codes, uint8_t* code_lengths);
 
 void  _huffman_compress(
 		char* buffer,
 		uint64_t   size,
 		uint32_t*  codes,
-		uint32_t*  code_lengths,
-		uint8_t* output,
-		uint64_t*  output_size
+		uint8_t*   code_lengths,
+		BitWriter* writer
 		);
 Node  huffman_compress(
 		char* buffer,
 		uint64_t   size,
-		uint8_t* compressed_buffer,
-		uint64_t*  compressed_bytes 
+		BitWriter* writer
 		);
 void  huffman_decompress(
-		uint8_t* compressed_buffer,
-		uint64_t compressed_size,
+		BitWriter* writer,
 		Node& root,
 		char* output,
 		uint64_t* output_size
 		);
-
-void  _huffman_compress_v2(
-		char* buffer,
-		uint64_t   size,
-		uint32_t*  codes,
-		uint8_t*   code_lengths,
-		BitWriter* writer
-		);
-Node  huffman_compress_v2(
-		char* buffer,
-		uint64_t   size,
-		BitWriter* writer
-		);
-void  huffman_decompress_v2(
+void  huffman_decompress_lookup_table(
 		BitWriter* writer,
 		Node& root,
 		char* output,

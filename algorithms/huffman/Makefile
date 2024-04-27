@@ -3,7 +3,7 @@ PROJECT_NAME = $(shell basename "$(realpath ./)")
 
 ## CXX = g++
 CXX = clang++
-CXXFLAGS = -std=c++17 -Wall -g -O3
+CXXFLAGS = -std=c++11 -Wall -g -O3 -Wno-unused-result -march=native
 ## CXXFLAGS = -Wall -g -O3
 MEMFLAGS = -fsanitize=address -fno-omit-frame-pointer
 OS = $(shell uname -s)
