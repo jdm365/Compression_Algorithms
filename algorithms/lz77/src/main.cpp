@@ -22,8 +22,8 @@ int main() {
 	// Time the compression
 	clock_t start = clock();
 
-	// BitStream* compressed_buffer = lz77_compress(buffer, filesize);
-	BitStream* compressed_buffer = lz77_compress_hash_array(buffer, filesize);
+	// BitStream* compressed_buffer = lz77_compress_old(buffer, filesize);
+	BitStream* compressed_buffer = lz77_compress(buffer, filesize);
 	uint64_t compressed_bytes = compressed_buffer->bit_index / 8;
 	printf("Compression MB/s: %f\n", (double)filesize / (double)(clock() - start) * CLOCKS_PER_SEC / (1024.0 * 1024.0));
 
@@ -36,20 +36,12 @@ int main() {
 			);
 	printf("Decompression MB/s: %f\n", (double)filesize / (double)(clock() - start) * CLOCKS_PER_SEC / (1024.0 * 1024.0));
 
-	printf("Decompressed buffer: ");
 	/*
+	printf("Decompressed buffer: ");
 	for (uint64_t idx = 0; idx < NUM_PRINT; ++idx) {
 		printf("%c", decompressed_buffer[idx]);
 	}
 	*/
-	for (uint64_t idx = 0; idx < decompressed_size; ++idx) {
-		if (decompressed_buffer[idx] != buffer[idx]) {
-			printf("DECOMPRESSED: %c\n", decompressed_buffer[idx]);
-			printf("ORIG:         %c\n", buffer[idx]);
-			printf("IDX:          %lu\n", idx);
-		}
-	}
-	printf("\n\n");
 
 	if (check_buffer_equivalence(buffer, decompressed_buffer, filesize)) {
 		printf("SUCCESS\n");

@@ -14,6 +14,7 @@ uint32_t hash(uint32_t pattern) {
 }
 
 void init_hash_table(HashTableArray* table) {
+	table->buckets = (ArrayNode*)malloc(sizeof(ArrayNode) * (1 << TABLE_SIZE));
 	for (uint32_t idx = 0; idx < (1 << TABLE_SIZE); ++idx) {
 		table->buckets[idx] = {0, 0, false};
 	}
@@ -158,7 +159,7 @@ uint64_t read_bits(BitStream* stream, uint64_t num_bits) {
 }
 
 
-BitStream* lz77_compress(
+BitStream* lz77_compress_old(
 		const char* buffer,
 		uint64_t size
 		) {
@@ -235,7 +236,7 @@ BitStream* lz77_compress(
 	return stream;
 }
 
-BitStream* lz77_compress_hash_array(
+BitStream* lz77_compress(
 		const char* buffer,
 		uint64_t size
 		) {

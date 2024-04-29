@@ -146,12 +146,12 @@ void custom_test(const char* filename) {
 
 int main(int argc, char* argv[]) {
 	// const char* FILENAME = "../../data/enwik6";
-	const char* FILENAME = "../../data/enwik7";
-	// const char* FILENAME = "../../data/enwik8";
+	// const char* FILENAME = "../../data/enwik7";
+	const char* FILENAME = "../../data/enwik8";
 	// const char* FILENAME = "../../data/enwik9";
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
 
 	gzip_default_test(FILENAME);
-	custom_test(FILENAME);
+	// custom_test(FILENAME);
     return 0;
 }

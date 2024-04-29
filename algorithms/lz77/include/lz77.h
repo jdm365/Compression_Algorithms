@@ -2,9 +2,9 @@
 
 #include <stdint.h>
 
-#define LENGTH_BITS 5
+#define LENGTH_BITS 4
 #define WINDOW_BITS 14 
-#define TABLE_SIZE 18
+#define TABLE_SIZE (WINDOW_BITS + 6)
 
 
 uint64_t min(uint64_t a, uint64_t b);
@@ -22,7 +22,8 @@ typedef struct ArrayNode {
 } ArrayNode;
 
 typedef struct {
-	ArrayNode buckets[1 << TABLE_SIZE];
+	// ArrayNode buckets[1 << TABLE_SIZE];
+	ArrayNode* buckets;
 	uint32_t bucket_indices[1 << WINDOW_BITS];
 	uint32_t current_idx;
 	bool is_full;
@@ -47,11 +48,11 @@ bool check_buffer_equivalence(
 		uint64_t size
 		);
 
-BitStream* lz77_compress(
+BitStream* lz77_compress_old(
 		const char* buffer,
 		uint64_t size
 		);
-BitStream* lz77_compress_hash_array(
+BitStream* lz77_compress(
 		const char* buffer,
 		uint64_t size
 		);
