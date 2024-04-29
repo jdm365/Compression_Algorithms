@@ -2,52 +2,62 @@
 
 #include <stdint.h>
 
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
+#define LENGTH_BITS 5
+#define WINDOW_BITS 14 
+#define TABLE_SIZE 18
+
+
+uint64_t min(uint64_t a, uint64_t b);
+uint64_t max(uint64_t a, uint64_t b);
 
 typedef struct {
-    u8* data;
-    u64 bit_index;
+    uint8_t* data;
+    uint64_t bit_index;
 } BitStream;
 
-inline u32 char_hash(char* str, u32 mod_val = 1) {
-	return (((u32)str[0] << 16) | ((u32)str[1] << 8) | (u32)str[2]) % mod_val;
-}
+typedef struct ArrayNode {
+	uint32_t pattern;
+	uint64_t index;
+	bool is_set;
+} ArrayNode;
 
-/*
 typedef struct {
-	u32* index;
-	u32  idx_ptr;
-	u32  size;
-} HashTable;
-*/
+	ArrayNode buckets[1 << TABLE_SIZE];
+	uint32_t bucket_indices[1 << WINDOW_BITS];
+	uint32_t current_idx;
+	bool is_full;
+} HashTableArray;
 
-void  print_bit_string(char* buffer, u64 size);
-char* read_input_buffer(const char* filename, u64* size);
-void  init_bitstream(BitStream* stream, u8* buffer);
+uint32_t hash(uint32_t pattern);
+void init_hash_table(HashTableArray* table);
+void insert_hash_table(HashTableArray* table, uint32_t pattern, uint64_t index);
+uint64_t find(HashTableArray* table, uint32_t pattern);
+
+void  print_bit_string(const char* buffer, uint64_t size);
+char* read_input_buffer(const char* filename, uint64_t* size);
+void  init_bitstream(BitStream* stream, uint8_t* buffer);
 
 void write_bit(BitStream* stream, bool bit);
 bool read_bit(BitStream* stream);
-void write_bits(BitStream* stream, u64 value, u64 num_bits);
-u64  read_bits(BitStream* stream, u64 num_bits);
+void write_bits(BitStream* stream, uint64_t value, uint64_t num_bits);
+uint64_t read_bits(BitStream* stream, uint64_t num_bits);
 bool check_buffer_equivalence(
-		char* buffer1,
-		char* buffer2,
-		u64 size
+		const char* buffer1,
+		const char* buffer2,
+		uint64_t size
 		);
 
 BitStream* lz77_compress(
-		char* buffer,
-		u64 size,
-		u8 window_bits,
-		u8 length_bits
+		const char* buffer,
+		uint64_t size
+		);
+BitStream* lz77_compress_hash_array(
+		const char* buffer,
+		uint64_t size
 		);
 char* lz77_decompress(
 		BitStream* compressed_stream,
-		u64  size,
-		u64* decompressed_size,
-		u8 window_bits,
-		u8 length_bits
+		uint64_t  size,
+		uint64_t* decompressed_size
 		);
+
