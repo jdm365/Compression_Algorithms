@@ -1,13 +1,10 @@
 ## Makefile
 PROJECT_NAME = $(shell basename "$(realpath ./)")
 
-SHELL := /bin/bash
-
-CXX = gcc
-## CXX = clang
-CXXFLAGS = -Wall -g -O3 -march=native -Wno-unused-variable -Wno-unused-function -Wno-format
+## CXX = g++
+CXX = clang++
+CXXFLAGS = -std=c++17 -Wall -g -O3 -Wno-unused-variable -Wno-unused-function -Wno-format
 LDFLAGS = -lz
-
 OS = $(shell uname -s)
 ifeq ($(OS), Darwin)
 	LDFLAGS += -Xpreprocessor -fopenmp -lomp
@@ -19,8 +16,8 @@ ifeq ($(CXX), clang++)
 	CXXFLAGS += -stdlib=libc++
 endif
 
-SRCS = ./*.c
-INCLUDES = -I./
+SRCS = src/*
+INCLUDES = -Iinclude
 TARGET = bin/release/$(PROJECT_NAME)
 
 MEMFLAGS = -fsanitize=address -fno-omit-frame-pointer
@@ -33,8 +30,7 @@ sanitize:
 	./$(TARGET)
 
 run: all
-	time ./$(TARGET)
-
+	./$(TARGET)
 
 clean:
 	rm -f $(TARGET)

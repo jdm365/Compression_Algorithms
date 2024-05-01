@@ -35,8 +35,8 @@ int main() {
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
 	// const char* FILENAME = "../../data/enwik6";
 	// const char* FILENAME = "../../data/enwik7";
-	const char* FILENAME = "../../data/enwik8";
-	// const char* FILENAME = "../../data/enwik9";
+	// const char* FILENAME = "../../data/enwik8";
+	const char* FILENAME = "../../data/enwik9";
 	uint64_t filesize;
 
 	char* buffer = read_input_buffer(FILENAME, &filesize);

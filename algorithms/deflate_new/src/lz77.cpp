@@ -52,6 +52,7 @@ void insert_hash_table(HashTableArray* table, uint32_t pattern, uint64_t index) 
 
 	// printf("Full: %d Index: %lu Current index: %u\n", table->is_full, index, table->current_idx);
 	if (table->current_idx >= ((1 << WINDOW_BITS) - 1) && !table->is_full) {
+		printf("ONLY ONCE\n");
 		table->is_full = true;
 	}
 
@@ -90,24 +91,6 @@ void print_bit_string(const char* buffer, uint64_t size) {
 		}
 	}
 	printf("\n");
-}
-
-char* read_input_buffer(
-		const char* filename,
-		uint64_t* size
-		) {
-	char* buffer;
-
-	FILE* file = fopen(filename, "rb");
-	fseek(file, 0, SEEK_END);
-	*size = ftell(file);
-	fseek(file, 0, SEEK_SET);
-
-	buffer = (char*)malloc(*size + 1);
-	size_t _ = fread(buffer, 1, *size, file);
-	fclose(file);
-
-	return buffer;
 }
 
 void init_bitstream(BitStream* stream, uint8_t* buffer) {
@@ -348,19 +331,4 @@ char* lz77_decompress(
 
 	*decompressed_size = buffer_index;
 	return buffer;
-}
-
-bool check_buffer_equivalence(
-		const char* buffer1,
-		const char* buffer2,
-		uint64_t   size
-		) {
-	uint64_t num_diff = 0;
-	for (uint64_t idx = 0; idx < size; ++idx) {
-		if (buffer1[idx] != buffer2[idx]) {
-			num_diff++;
-		}
-	}
-	printf("Number of differences: %lu\n", num_diff);
-	return (num_diff == 0);
 }

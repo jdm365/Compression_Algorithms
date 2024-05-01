@@ -95,32 +95,24 @@ void gzip_default_test(const char* filename) {
 }
 
 void custom_test(const char* filename) {
-	u64 filesize;
+	uint64_t filesize;
 	char* buffer = read_input_buffer(filename, &filesize);
 
 	printf("File size uncompressed: %d\n", (int)filesize);
-
-	const int LENGTH_BITS = 6; 
-	const int WINDOW_BITS = 12;
 
 	clock_t start = clock();
 
 	StateData state_data = deflate_compress(
 			buffer, 
-			filesize, 
-			WINDOW_BITS,
-			LENGTH_BITS
+			filesize
 			);
-	u64   compressed_bytes = state_data.huffman_compressed_size;
+	uint64_t compressed_bytes = state_data.huffman_writer->buffer_size;
 	printf("File size compressed:   %d\n", (int)compressed_bytes);
 
-	exit(0);
-	u64   decompressed_bytes = state_data.lz77_compressed_size;
+	uint64_t decompressed_bytes = state_data.lz77_compressed_size;
 	char* decompressed_buffer = deflate_decompress(
 			state_data,
-			&decompressed_bytes,
-			WINDOW_BITS,
-			LENGTH_BITS
+			&decompressed_bytes
 			);
 
 	if (compare_buffers(buffer, decompressed_buffer, filesize)) {
@@ -151,7 +143,7 @@ int main(int argc, char* argv[]) {
 	// const char* FILENAME = "../../data/enwik9";
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
 
-	gzip_default_test(FILENAME);
-	// custom_test(FILENAME);
+	// gzip_default_test(FILENAME);
+	custom_test(FILENAME);
     return 0;
 }

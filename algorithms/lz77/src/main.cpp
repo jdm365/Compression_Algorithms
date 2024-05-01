@@ -13,14 +13,15 @@ int main() {
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
 	// const char* FILENAME = "../../data/enwik6";
 	// const char* FILENAME = "../../data/enwik7";
-	const char* FILENAME = "../../data/enwik8";
-	// const char* FILENAME = "../../data/enwik9";
+	// const char* FILENAME = "../../data/enwik8";
+	const char* FILENAME = "../../data/enwik9";
 	char* buffer = read_input_buffer(FILENAME, &filesize);
 
 	const uint64_t NUM_PRINT = min(100, (int)filesize);
 
 	// Time the compression
 	clock_t start = clock();
+	clock_t original_start = start;
 
 	// BitStream* compressed_buffer = lz77_compress_old(buffer, filesize);
 	BitStream* compressed_buffer = lz77_compress(buffer, filesize);
@@ -57,7 +58,7 @@ int main() {
 	printf("Compressed size:    %lu\n", compressed_bytes);
 	printf("Reconstructed size: %lu\n", decompressed_size);
 	printf("Compression ratio:  %f\n",  (double)filesize / compressed_bytes);
-	printf("Total time:         %fs\n", (double)(clock() - start) / CLOCKS_PER_SEC);
+	printf("Total time:         %fs\n", (double)(clock() - original_start) / CLOCKS_PER_SEC);
 	printf("========================================================================\n");
 
 	free(buffer);
