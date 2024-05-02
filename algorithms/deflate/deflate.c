@@ -69,7 +69,9 @@ StateData compress(const char* input_filename) {
 
 	free(buffer);
 	free(compressed_buffer);
-	free(table.buckets);
+	free(table.buckets.patterns);
+	free(table.buckets.indices);
+	free(table.buckets.is_set);
 	return state_data;
 }
 

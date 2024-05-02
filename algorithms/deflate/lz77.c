@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "lz77.h"
+#include "huffman.h"
 
 uint64_t min(uint64_t a, uint64_t b) { return a < b ? a : b; }
 uint64_t max(uint64_t a, uint64_t b) { return a > b ? a : b; }
@@ -41,7 +42,13 @@ inline uint32_t hash(uint32_t pattern) {
 }
 
 void init_hash_table(HashTableArray* table) {
-	table->buckets = (ArrayNode*)malloc(sizeof(ArrayNode) * TABLE_SIZE);
+	// table->buckets = (ArrayNode*)malloc(sizeof(ArrayNode) * TABLE_SIZE);
+	table->buckets.patterns = (uint32_t*)malloc(sizeof(uint32_t) * TABLE_SIZE);
+	table->buckets.indices  = (uint64_t*)malloc(sizeof(uint64_t) * TABLE_SIZE);
+	table->buckets.is_set   = (bool*)malloc(sizeof(bool) * TABLE_SIZE);
+	memset(table->buckets.patterns, 0, sizeof(uint32_t) * TABLE_SIZE);
+
+	/*
 	if (table->buckets == NULL) {
 		fprintf(stderr, "Error: could not allocate memory for hash table\n");
 		exit(1);
@@ -52,6 +59,7 @@ void init_hash_table(HashTableArray* table) {
 		table->buckets[idx].index   = 0;
 		table->buckets[idx].is_set  = false;
 	}
+	*/
 	memset(table->bucket_indices, 0, sizeof(uint32_t) * (1 << MAX_WINDOW_BITS));
 	table->current_idx = 0;
 	table->is_full = false;
@@ -82,7 +90,13 @@ void insert_hash_table(HashTableArray* table, uint32_t pattern, uint64_t index) 
 		bucket_idx %= TABLE_SIZE;
 	}
 	*/
+
+	/*
 	while (table->buckets[bucket_idx].is_set) {
+		bucket_idx = (bucket_idx + 1) % TABLE_SIZE;
+	}
+	*/
+	while (table->buckets.is_set[bucket_idx]) {
 		bucket_idx = (bucket_idx + 1) % TABLE_SIZE;
 	}
 
@@ -95,19 +109,30 @@ void insert_hash_table(HashTableArray* table, uint32_t pattern, uint64_t index) 
 	}
 	*/
 
+	/*
 	ArrayNode new_node = {
 		pattern,
 		index,
 		true
 	};
 	table->buckets[bucket_idx] = new_node;
+	*/
+	table->buckets.patterns[bucket_idx] = pattern;
+	table->buckets.indices[bucket_idx]  = index;
+	table->buckets.is_set[bucket_idx]   = true;
 
 	if (table->is_full) {
 		// Remove lra node.
 		uint32_t lra_idx = table->bucket_indices[table->current_idx];
+
+		/*
 		table->buckets[lra_idx].pattern = 0;
 		table->buckets[lra_idx].index   = 0;
 		table->buckets[lra_idx].is_set  = false;
+		*/
+		table->buckets.patterns[lra_idx] = 0;
+		table->buckets.indices[lra_idx]  = 0;
+		table->buckets.is_set[lra_idx]   = false;
 	}
 
 	table->bucket_indices[table->current_idx++] = bucket_idx;
@@ -122,6 +147,7 @@ void insert_hash_table(HashTableArray* table, uint32_t pattern, uint64_t index) 
 uint64_t find(HashTableArray* table, uint32_t pattern) {
 	uint32_t bucket_idx = hash(pattern);
 
+	/*
 	while (
 			table->buckets[bucket_idx].pattern != pattern
 				&&
@@ -133,6 +159,18 @@ uint64_t find(HashTableArray* table, uint32_t pattern) {
 	if (!table->buckets[bucket_idx].is_set) return UINT64_MAX;
 
 	return table->buckets[bucket_idx].index;
+	*/
+	while (
+			table->buckets.patterns[bucket_idx] != pattern
+				&&
+			table->buckets.is_set[bucket_idx]
+			) {
+		++bucket_idx;
+	}
+
+	if (!table->buckets.is_set[bucket_idx]) return UINT64_MAX;
+
+	return table->buckets.indices[bucket_idx];
 }
 
 inline void write_literal(
@@ -165,6 +203,8 @@ void lz77_compress(
 		uint64_t* compressed_buffer_size,
 		HashTableArray* table
 		) {
+	uint32_t frequencies[NUM_CODES] = {0};
+
 	uint64_t buffer_index = 0;
 	uint64_t compressed_buffer_index = 0;
 
@@ -186,6 +226,9 @@ void lz77_compress(
 
 			write_literal(compressed_buffer, input_buffer[buffer_index], &compressed_buffer_index);
 			insert_hash_table(table, current_word, buffer_index);
+
+			// Write to huffman frequency table.
+			append_huffman_tree_literal(frequencies, input_buffer[buffer_index]);
 
 			++buffer_index;
 		}
@@ -225,11 +268,15 @@ void lz77_compress(
 				uint32_t word = *(uint32_t*)(&input_buffer[buffer_index - length + idx]);
 				insert_hash_table(table, word, buffer_index - length + idx);
 			}
+
+			// Write to huffman frequency table.
+			append_huffman_tree_pair(frequencies, offset);
 		}
 	}
 
-	// Shrinking the buffer to the actual size. **Might not be a good idea here.
 	*compressed_buffer_size = compressed_buffer_index;
+
+	// TODO: Build huffman tree and encode compressed buffer.
 }
 
 void lz77_decompress(

@@ -13,8 +13,15 @@ typedef struct ArrayNode {
 	bool is_set;
 } ArrayNode;
 
+typedef struct Buckets {
+	uint32_t* patterns;
+	uint64_t* indices;
+	bool* is_set;
+} Buckets;
+
 typedef struct {
-	ArrayNode* buckets;
+	// ArrayNode* buckets;
+	Buckets buckets;
 	uint32_t bucket_indices[1 << MAX_WINDOW_BITS];
 	uint32_t current_idx;
 	bool is_full;
