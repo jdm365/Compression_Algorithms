@@ -86,12 +86,14 @@ void insert_hash_table(HashTableArray* table, uint32_t pattern, uint64_t index) 
 		bucket_idx = (bucket_idx + 1) % TABLE_SIZE;
 	}
 
+	/*
 	if (bucket_idx - hash(pattern) > 0) {
 		printf("Collisions: %u\n", bucket_idx - hash(pattern));
 	}
 	else {
 		printf("No collisions\n");
 	}
+	*/
 
 	ArrayNode new_node = {
 		pattern,
