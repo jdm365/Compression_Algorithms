@@ -13,8 +13,8 @@ int main() {
 	// const char* FILENAME = "../../data/declaration_of_independence.txt";
 	// const char* FILENAME = "../../data/enwik6";
 	// const char* FILENAME = "../../data/enwik7";
-	// const char* FILENAME = "../../data/enwik8";
-	const char* FILENAME = "../../data/enwik9";
+	const char* FILENAME = "../../data/enwik8";
+	// const char* FILENAME = "../../data/enwik9";
 	char* buffer = read_input_buffer(FILENAME, &filesize);
 
 	const uint64_t NUM_PRINT = min(100, (int)filesize);
@@ -29,7 +29,7 @@ int main() {
 	printf("Compression MB/s: %f\n", (double)filesize / (double)(clock() - start) * CLOCKS_PER_SEC / (1024.0 * 1024.0));
 
 	start = clock();
-	uint64_t   decompressed_size = filesize;
+	uint64_t decompressed_size = filesize;
 	char* decompressed_buffer = lz77_decompress(
 			compressed_buffer, 
 			filesize, 

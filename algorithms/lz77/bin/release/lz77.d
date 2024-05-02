@@ -1,2 +1,2 @@
-bin/release/lz77: src/main.cpp include/lz77.h
-include/lz77.h:
+bin/release/lz77: main.c lz77.h
+lz77.h:

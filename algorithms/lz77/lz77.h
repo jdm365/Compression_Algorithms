@@ -1,10 +1,11 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define LENGTH_BITS 4
 #define WINDOW_BITS 14 
-#define TABLE_SIZE (WINDOW_BITS + 6)
+#define TABLE_SIZE (1 << (WINDOW_BITS + 6))
 
 
 uint64_t min(uint64_t a, uint64_t b);
@@ -22,7 +23,6 @@ typedef struct ArrayNode {
 } ArrayNode;
 
 typedef struct {
-	// ArrayNode buckets[1 << TABLE_SIZE];
 	ArrayNode* buckets;
 	uint32_t bucket_indices[1 << WINDOW_BITS];
 	uint32_t current_idx;

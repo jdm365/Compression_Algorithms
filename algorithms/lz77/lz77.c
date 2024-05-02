@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "lz77.h"
 
@@ -9,14 +10,42 @@ uint64_t min(uint64_t a, uint64_t b) { return a < b ? a : b; }
 uint64_t max(uint64_t a, uint64_t b) { return a > b ? a : b; }
 
 
-uint32_t hash(uint32_t pattern) {
-	return pattern % (1 << TABLE_SIZE);
+inline uint32_t hash(uint32_t pattern) {
+	uint32_t c1 = 0xcc9e2d51;
+    uint32_t c2 = 0x1b873593;
+    uint32_t r1 = 15;
+    uint32_t r2 = 13;
+    uint32_t m = 5;
+    uint32_t n = 0xe6546b64;
+
+    uint32_t hash = 0;
+    uint32_t k   = pattern;
+
+    // Prepare the key
+    k *= c1;
+    k = (k << r1) | (k >> (32 - r1));
+    k *= c2;
+
+    // Mix into hash
+    hash ^= k;
+    hash = ((hash << r2) | (hash >> (32 - r2))) * m + n;
+
+    // Finalize hash
+    hash ^= hash >> 16;
+    hash *= 0x85ebca6b;
+    hash ^= hash >> 13;
+    hash *= 0xc2b2ae35;
+    hash ^= hash >> 16;
+
+	return hash % TABLE_SIZE;
 }
 
 void init_hash_table(HashTableArray* table) {
-	table->buckets = (ArrayNode*)malloc(sizeof(ArrayNode) * (1 << TABLE_SIZE));
-	for (uint32_t idx = 0; idx < (1 << TABLE_SIZE); ++idx) {
-		table->buckets[idx] = {0, 0, false};
+	table->buckets = (ArrayNode*)malloc(sizeof(ArrayNode) * TABLE_SIZE);
+	for (uint32_t idx = 0; idx < TABLE_SIZE; ++idx) {
+		table->buckets[idx].pattern = 0;
+		table->buckets[idx].index = 0;
+		table->buckets[idx].is_set = false;
 	}
 	memset(table->bucket_indices, 0, sizeof(uint32_t) * (1 << WINDOW_BITS));
 	table->current_idx = 0;
@@ -41,11 +70,9 @@ void insert_hash_table(HashTableArray* table, uint32_t pattern, uint64_t index) 
 	if (table->is_full) {
 		// Remove lra node.
 		uint32_t lra_idx = table->bucket_indices[table->current_idx];
-		table->buckets[lra_idx] = {
-			0,
-			0,
-			false
-		};
+		table->buckets[lra_idx].pattern = 0;
+		table->buckets[lra_idx].index   = 0;
+		table->buckets[lra_idx].is_set  = false;
 	}
 
 	table->bucket_indices[table->current_idx++] = bucket_idx;
@@ -77,7 +104,6 @@ uint64_t find(HashTableArray* table, uint32_t pattern) {
 
 	if (!table->buckets[bucket_idx].is_set) return UINT64_MAX;
 
-	// print_array_node(&table->buckets[bucket_idx]);
 	return table->buckets[bucket_idx].index;
 }
 
@@ -261,7 +287,7 @@ BitStream* lz77_compress(
 		uint64_t match_idx = orig_match_idx;
 
 		// if (match_idx == UINT64_MAX) {
-		if (match_idx == UINT64_MAX || buffer_index - match_idx == (1 << WINDOW_BITS)) {
+		if (match_idx == UINT64_MAX || buffer_index - match_idx == window_size + 1) {
 			// No match found.
 			// Add char literal to the buffer and add word pattern to the hash table.
 			write_bit(stream, 0);
@@ -286,11 +312,11 @@ BitStream* lz77_compress(
 
 			uint32_t length = match_idx - orig_match_idx;
 			uint32_t offset = buffer_index - match_idx;
-			if (offset >= (1 << WINDOW_BITS)) {
+			if (offset >= window_size + 1) {
 				printf("Offset `%u` is too large."
-					   "Offset cannot exceed window size of `%u`\n",
+					   "Offset cannot exceed window size of `%lu`\n",
 					   offset,
-					   (1 << WINDOW_BITS)
+					   window_size + 1
 					   );
 				printf("Current buffer_index: %lu Current match_idx: %lu"
 						" DIFF: %lu\n"
