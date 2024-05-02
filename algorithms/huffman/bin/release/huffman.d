@@ -1,3 +1,3 @@
-bin/release/huffman: src/main.cpp include/huffman.h
+bin/release/huffman: main.c huffman.h
 
-include/huffman.h:
+huffman.h:

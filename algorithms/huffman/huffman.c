@@ -1,16 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <queue>
+#include <stdbool.h>
 
 #include "huffman.h"
 
-
-inline uint8_t min(uint8_t a, uint8_t b) {
-	if (a > b) return b;
-	return a;
-}
 
 void init_bitwriter(BitWriter* writer, uint64_t buffer_size) {
 	writer->buffer      = (uint32_t*)malloc(buffer_size);
@@ -21,7 +15,7 @@ void init_bitwriter(BitWriter* writer, uint64_t buffer_size) {
 }
 
 
-inline void write_bits(BitWriter* writer, uint32_t bits, uint8_t length) {
+void write_bits(BitWriter* writer, uint32_t bits, uint8_t length) {
 	int8_t nbits_rem_word_0 = 32 - writer->bit_idx;
 	int8_t shift = nbits_rem_word_0 - length;
 
@@ -83,6 +77,104 @@ char* read_input_buffer(
 	return buffer;
 }
 
+PriorityQueue* init_priority_queue(
+		uint64_t capacity
+		) {
+	PriorityQueue* queue = (PriorityQueue*)malloc(sizeof(PriorityQueue));
+	queue->nodes = (Node**)malloc(capacity * sizeof(Node*));
+	queue->size = 0;
+	queue->capacity = capacity;
+
+	return queue;
+}
+
+void swap_nodes(
+		Node** a,
+		Node** b
+		) {
+	Node* temp = *a;
+	*a = *b;
+	*b = temp;
+}
+
+void heapify_up(
+		PriorityQueue* queue,
+		uint64_t idx
+		) {
+	uint64_t parent = (idx - 1) / 2;
+	while (idx > 0 && queue->nodes[idx]->frequency < queue->nodes[parent]->frequency) {
+		swap_nodes(&queue->nodes[idx], &queue->nodes[parent]);
+		idx = parent;
+		parent = (idx - 1) / 2;
+	}
+}
+
+void heapify_down(
+		PriorityQueue* queue,
+		uint64_t idx
+		) {
+	uint64_t left = 2 * idx + 1;
+	uint64_t right = 2 * idx + 2;
+	uint64_t smallest = idx;
+
+	if (left < queue->size && queue->nodes[left]->frequency < queue->nodes[smallest]->frequency) {
+		smallest = left;
+	}
+	if (right < queue->size && queue->nodes[right]->frequency < queue->nodes[smallest]->frequency) {
+		smallest = right;
+	}
+
+	if (smallest != idx) {
+		swap_nodes(&queue->nodes[idx], &queue->nodes[smallest]);
+		heapify_down(queue, smallest);
+	}
+}
+
+void enqueue(
+		PriorityQueue* queue,
+		Node* node
+		) {
+	if (queue->size == queue->capacity) {
+		printf("ERROR: Queue is full\n");
+		exit(1);
+	}
+
+	queue->nodes[queue->size++] = node;
+	heapify_up(queue, queue->size - 1);
+}
+
+Node* dequeue(
+		PriorityQueue* queue
+		) {
+	if (queue->size == 0) {
+		printf("ERROR: Queue is empty\n");
+		exit(1);
+	}
+
+	Node* node = queue->nodes[0];
+	queue->nodes[0] = queue->nodes[--queue->size];
+	heapify_down(queue, 0);
+
+	return node;
+}
+
+bool is_empty(PriorityQueue* queue) {
+	return queue->size == 0;
+}
+
+Node* init_node(
+		uint8_t value,
+		uint32_t frequency
+		) {
+	Node* node = (Node*)malloc(sizeof(Node));
+	node->value = value;
+	node->frequency = frequency;
+	node->left = NULL;
+	node->right = NULL;
+
+	return node;
+}
+
 
 void build_huffman_tree(
 		char* buffer,
@@ -94,30 +186,32 @@ void build_huffman_tree(
 		++frequencies[(uint8_t)buffer[idx]];
 	}
 
-	std::priority_queue<Node*, std::vector<Node*>, Node::compare> queue;
+	PriorityQueue* queue = init_priority_queue(256);
+
 	for (uint8_t idx = 0; idx < 255; ++idx) {
 		if (frequencies[idx] > 0) {
-			queue.push(new Node(idx, frequencies[idx]));
+			enqueue(queue, init_node(idx, frequencies[idx]));
 		}
 	}
 	if (frequencies[255] > 0) {
-		queue.push(new Node(255, frequencies[255]));
+		enqueue(queue, init_node(255, frequencies[255]));
 	}
 
-	while (queue.size() > 1) {
-		Node* left = queue.top();
-		queue.pop();
+	while (queue->size > 1) {
+		Node* left  = dequeue(queue);
+		Node* right = dequeue(queue);
 
-		Node* right = queue.top();
-		queue.pop();
-
-		Node* parent = new Node(0, left->frequency + right->frequency);
+		Node* parent = init_node(0, left->frequency + right->frequency);
 		parent->left = left;
 		parent->right = right;
-		queue.push(parent);
+
+		enqueue(queue, parent);
 	}
 
-	*root = queue.top();
+	*root = dequeue(queue);
+
+	free(queue->nodes);
+	free(queue);
 }
 
 void gather_codes(
@@ -127,14 +221,14 @@ void gather_codes(
 		uint32_t* codes,
 		uint8_t*  code_lengths
 		) {
-	if (root->left == nullptr && root->right == nullptr) {
+	if (root->left == NULL && root->right == NULL) {
 		codes[root->value] 	   = code;
 		code_lengths[root->value] = length;
 		return;
 	}
 	code <<= 1;
 
-	if (root->left != nullptr) {
+	if (root->left != NULL) {
 		gather_codes(
 				root->left, 
 				code,
@@ -144,7 +238,7 @@ void gather_codes(
 				);
 	}
 
-	if (root->right != nullptr) {
+	if (root->right != NULL) {
 		gather_codes(
 				root->right, 
 				code + 1,
@@ -198,8 +292,7 @@ Node huffman_compress(
 		) {
 	init_bitwriter(bit_writer, size);
 
-	Node* root = nullptr;
-	root = new Node(0, 0);
+	Node* root = init_node(0, 0);
 	build_huffman_tree(buffer, size, &root);
 
 	uint32_t codes[256]        = {0};
@@ -236,7 +329,7 @@ Node huffman_compress(
 
 void huffman_decompress(
         BitWriter* writer,
-        Node& root,
+        Node* root,
         char* output,
         uint64_t* output_size
         ) {
@@ -249,8 +342,8 @@ void huffman_decompress(
 
 	uint32_t current_word = writer->buffer[0];
     do {
-        Node* node = &root;
-        while (node->left != nullptr && node->right != nullptr) {
+        Node* node = root;
+        while (node->left != NULL && node->right != NULL) {
             // Extract the correct bit from the current 32-bit word
             if (current_word & (1 << (31 - bit_idx))) {
                 node = node->right;
@@ -272,13 +365,13 @@ void huffman_decompress(
 
 void huffman_decompress_lookup_table(
         BitWriter* writer,
-        Node& root,
+        Node* root,
         char* output,
         uint64_t* output_size
         ) {
 	uint32_t lookup_table[256] = {0};
 	uint8_t  lookup_table_lengths[256] = {0};
-	gather_codes(&root, 0, 0, lookup_table, lookup_table_lengths);
+	gather_codes(root, 0, 0, lookup_table, lookup_table_lengths);
 
     uint64_t char_idx = 0;
     uint64_t word_idx = 0;

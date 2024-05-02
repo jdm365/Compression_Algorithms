@@ -70,7 +70,7 @@ int main() {
 	huffman_decompress(
 	// huffman_decompress_lookup_table(
 			&bit_writer,
-			root,
+			&root,
 			decompressed_buffer,
 			&decompressed_bytes
 			);

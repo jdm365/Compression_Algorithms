@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 
 static const uint32_t BIT_MASK[33] = {
 	0x00000000,
@@ -46,38 +47,33 @@ typedef struct {
 } BitWriter;
 
 void init_bitwriter(BitWriter* writer, uint64_t buffer_size);
-inline void write_bits(BitWriter *writer, uint32_t bits, uint32_t length);
-inline void read_bits(BitWriter *writer, uint32_t* bits, uint32_t length);
+void write_bits(BitWriter* writer, uint32_t bits, uint8_t length);
+void read_bits(BitWriter* writer, uint32_t* bits, uint8_t length);
 
-struct Node {
+typedef struct Node Node;
+typedef struct Node {
 	uint8_t value;
 	uint32_t frequency;
 	Node* left;
 	Node* right;
+} Node;
 
-	Node(uint8_t value, uint32_t frequency) {
-		this->value = value;
-		this->frequency = frequency;
-		this->left  = nullptr;
-		this->right = nullptr;
-	}
+typedef struct PriorityQueue {
+	Node** nodes;
+	uint64_t size;
+	uint64_t capacity;
+} PriorityQueue;
 
-	~Node() {
-		if (left != nullptr) {
-			delete left;
-		}
+PriorityQueue* init_priority_queue(uint64_t capacity);
+void swap_nodes(Node** a, Node** b);
+void heapify_up(PriorityQueue* queue, uint64_t idx);
+void heapify_down(PriorityQueue* queue, uint64_t idx);
+void enqueue(PriorityQueue* queue, Node* node);
+Node* dequeue(PriorityQueue* queue);
+bool is_empty(PriorityQueue* queue);
 
-		if (right != nullptr) {
-			delete right;
-		}
-	}
+Node* init_node(uint8_t value, uint32_t frequency);
 
-	struct compare {
-		bool operator()(const Node* left, const Node* right) {
-			return left->frequency > right->frequency;
-		}
-	};
-};
 
 void  print_bit_string(uint8_t* buffer, uint64_t size);
 char* read_input_buffer(const char* filename, uint64_t* size);
@@ -105,13 +101,13 @@ Node  huffman_compress(
 		);
 void  huffman_decompress(
 		BitWriter* writer,
-		Node& root,
+		Node* root,
 		char* output,
 		uint64_t* output_size
 		);
 void  huffman_decompress_lookup_table(
 		BitWriter* writer,
-		Node& root,
+		Node* root,
 		char* output,
 		uint64_t* output_size
 		);
