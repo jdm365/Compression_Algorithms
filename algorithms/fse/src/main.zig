@@ -5,6 +5,70 @@ const BUFFER_SIZE: usize = (1 << 20);
 var SCRATCH_BUFFER: [4096]u8 = undefined;
 
 
+const HuffmanNode = struct {
+    value: u8,
+    freq: u32,
+    left:  *HuffmanNode,
+    right: *HuffmanNode,
+};
+
+pub fn buildHuffmanTree(
+    allocator: std.mem.Allocator,
+    buffer: *[BUFFER_SIZE]u8,
+    root: *HuffmanNode,
+) void {
+    // To start, do this on a chunk by chunk level.
+    var freqs: [256]usize = undefined;
+    @memset(freqs, 0);
+
+    var idx: usize = 0;
+    while (idx < BUFFER_SIZE) : (idx += 4) {
+        const idx_0: usize = @intCast(buffer[idx]);
+        const idx_1: usize = @intCast(buffer[idx+1]);
+        const idx_2: usize = @intCast(buffer[idx+2]);
+        const idx_3: usize = @intCast(buffer[idx+3]);
+
+        freqs[idx_0] += 1;
+        freqs[idx_1] += 1;
+        freqs[idx_2] += 1;
+        freqs[idx_3] += 1;
+    }
+
+    // TODO: Build huffman context to pass into pq.
+    const PQlt = std.PriorityQueue(*HuffmanNode, void, std.mem.lessThan);
+    var pq = PQlt.init(allocator, {});
+    defer pq.deinit();
+
+    for (0.., freqs[0..256]) |i, freq| {
+        if (freq > 0) {
+            const new_node = HuffmanNode{
+                .value = @intCast(i),
+                .freq = freq,
+                .left = null,
+                .right = null,
+            };
+            pq.add(&new_node);
+        }
+    }
+
+    while (pq.count() > 1) {
+        const left  = pq.remove();
+        const right = pq.remove();
+
+        const parent = HuffmanNode{
+            .value = 0,
+            .freq = left.freq + right.freq,
+            .left = left,
+            .right = right,
+        };
+
+        pq.add(&parent);
+    }
+
+    root = pq.remove();
+}
+
+
 const BitStream = struct {
     input_file: std.fs.File,
     output_file: std.fs.File,
@@ -45,7 +109,6 @@ const BitStream = struct {
 
     pub fn flushChunk(self: *BitStream) !void {
         _ = try self.output_file.write(
-            // std.mem.sliceAsBytes(self.buffer)
             self.buffer[0..self.buffer_idx]
             );
         self.buffer_idx = 0;
@@ -55,7 +118,6 @@ const BitStream = struct {
         const bytes_remaining = self.input_file_size - self.file_byte_idx;
         const bytes_to_read = @min(bytes_remaining, BUFFER_SIZE);
         _ = try self.input_file.read(
-            // std.mem.sliceAsBytes(self.buffer[self.file_byte_idx..self.file_byte_idx+bytes_to_read])
             self.buffer[0..bytes_to_read]
             );
         self.file_byte_idx += bytes_to_read;
