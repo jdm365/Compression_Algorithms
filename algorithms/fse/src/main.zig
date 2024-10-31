@@ -12,21 +12,31 @@ const HuffmanNode = struct {
     right: *HuffmanNode,
 };
 
+fn lessThan(context: void, a: *HuffmanNode, b: *HuffmanNode) std.math.Order {
+    _ = context;
+    return std.math.order(a.freq, b.freq);
+}
+
 pub fn buildHuffmanTree(
     allocator: std.mem.Allocator,
     buffer: *[BUFFER_SIZE]u8,
-    root: *HuffmanNode,
+    root: **HuffmanNode,
 ) !void {
     // To start, do this on a chunk by chunk level.
     var freqs: [256]usize = undefined;
     @memset(freqs[0..256], 0);
 
     var idx: usize = 0;
+    var idx_0: usize = 0;
+    var idx_1: usize = 0;
+    var idx_2: usize = 0;
+    var idx_3: usize = 0;
+
     while (idx < BUFFER_SIZE) : (idx += 4) {
-        const idx_0: usize = @intCast(buffer[idx]);
-        const idx_1: usize = @intCast(buffer[idx+1]);
-        const idx_2: usize = @intCast(buffer[idx+2]);
-        const idx_3: usize = @intCast(buffer[idx+3]);
+        idx_0 = @intCast(buffer[idx]);
+        idx_1 = @intCast(buffer[idx+1]);
+        idx_2 = @intCast(buffer[idx+2]);
+        idx_3 = @intCast(buffer[idx+3]);
 
         freqs[idx_0] += 1;
         freqs[idx_1] += 1;
@@ -34,20 +44,20 @@ pub fn buildHuffmanTree(
         freqs[idx_3] += 1;
     }
 
-    // TODO: Build huffman context to pass into pq.
-    const PQlt = std.PriorityQueue(*HuffmanNode, void, std.mem.lessThan);
-    var pq = PQlt.init(allocator, {});
+    var pq = std.PriorityQueue(*HuffmanNode, void, lessThan).init(allocator, {});
     defer pq.deinit();
 
     for (0.., freqs[0..256]) |i, freq| {
         if (freq > 0) {
-            const new_node = HuffmanNode{
+            const new_node: *HuffmanNode = try allocator.create(HuffmanNode);
+            new_node.* = HuffmanNode{
                 .value = @intCast(i),
-                .freq = freq,
-                .left = null,
-                .right = null,
+                // .freq = freq,
+                .freq = @intCast(freq),
+                .left = undefined,
+                .right = undefined,
             };
-            try pq.add(&new_node);
+            try pq.add(new_node);
         }
     }
 
@@ -55,17 +65,18 @@ pub fn buildHuffmanTree(
         const left  = pq.remove();
         const right = pq.remove();
 
-        const parent = HuffmanNode{
+        const parent: *HuffmanNode = try allocator.create(HuffmanNode);
+        parent.* = HuffmanNode{
             .value = 0,
             .freq = left.freq + right.freq,
             .left = left,
             .right = right,
         };
 
-        try pq.add(&parent);
+        try pq.add(parent);
     }
 
-    root = pq.remove();
+    root.* = pq.remove();
 }
 
 
@@ -126,8 +137,8 @@ const BitStream = struct {
     pub fn compress(self: *BitStream, allocator: std.mem.Allocator) !void {
         while (self.file_byte_idx < self.input_file_size) {
             try self.readChunk();
-            const root: *HuffmanNode = undefined;
-            try buildHuffmanTree(allocator, &self.buffer, root);
+            var root: *HuffmanNode = undefined;
+            try buildHuffmanTree(allocator, &self.buffer, &root);
             try self.flushChunk();
         }
 
