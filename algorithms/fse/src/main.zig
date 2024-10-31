@@ -16,10 +16,10 @@ pub fn buildHuffmanTree(
     allocator: std.mem.Allocator,
     buffer: *[BUFFER_SIZE]u8,
     root: *HuffmanNode,
-) void {
+) !void {
     // To start, do this on a chunk by chunk level.
     var freqs: [256]usize = undefined;
-    @memset(freqs, 0);
+    @memset(freqs[0..256], 0);
 
     var idx: usize = 0;
     while (idx < BUFFER_SIZE) : (idx += 4) {
@@ -47,7 +47,7 @@ pub fn buildHuffmanTree(
                 .left = null,
                 .right = null,
             };
-            pq.add(&new_node);
+            try pq.add(&new_node);
         }
     }
 
@@ -62,7 +62,7 @@ pub fn buildHuffmanTree(
             .right = right,
         };
 
-        pq.add(&parent);
+        try pq.add(&parent);
     }
 
     root = pq.remove();
@@ -123,9 +123,11 @@ const BitStream = struct {
         self.file_byte_idx += bytes_to_read;
     }
 
-    pub fn compress(self: *BitStream) !void {
+    pub fn compress(self: *BitStream, allocator: std.mem.Allocator) !void {
         while (self.file_byte_idx < self.input_file_size) {
             try self.readChunk();
+            const root: *HuffmanNode = undefined;
+            try buildHuffmanTree(allocator, &self.buffer, root);
             try self.flushChunk();
         }
 
@@ -139,11 +141,11 @@ const BitStream = struct {
 pub fn main() !void {
     const filename = "../../data/enwik8";
 
-    // var arena = std.heap.ArenaAllocator(std.heap.page_allocator);
-    // defer arena.deinit();
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
 
     var stream = try BitStream.init(filename);
     defer stream.deinit();
 
-    try stream.compress();
+    try stream.compress(arena.allocator());
 }
