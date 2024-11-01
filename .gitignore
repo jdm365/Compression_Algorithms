@@ -2,3 +2,5 @@
 .zip
 .txt
 data/
+*.zig-cache/
+*.zig-out/

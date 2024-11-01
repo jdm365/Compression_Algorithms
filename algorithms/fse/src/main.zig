@@ -2,7 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 
 
-const BUFFER_SIZE: usize = (1 << 20);
+const BUFFER_SIZE: usize = (1 << 22);
 var SCRATCH_BUFFER: [4096]u8 = undefined;
 const endianness = builtin.cpu.arch.endian();
 
@@ -31,7 +31,7 @@ inline fn readValFromFile(
 
 pub fn buildHuffmanTree(
     allocator: std.mem.Allocator,
-    buffer: *[BUFFER_SIZE]u8,
+    buffer: []u8,
     root: *?*HuffmanNode,
 ) !void {
     // To start, do this on a chunk by chunk level.
@@ -158,7 +158,7 @@ fn gatherCodes(
         if (left_null and right_null) {
             const value = @as(usize, @intCast(root.value));
 
-            codes[value] = current_code;
+            codes[value] = current_code.*;
             code_lengths[value] = current_code_length;
             return;
         }
@@ -167,7 +167,7 @@ fn gatherCodes(
 
         if (!left_null) {
             gatherCodes(
-                _root.left,
+                root.left,
                 codes,
                 code_lengths,
                 current_code,
@@ -176,7 +176,7 @@ fn gatherCodes(
         }
         if (!right_null) {
             gatherCodes(
-                _root.right,
+                root.right,
                 codes,
                 code_lengths,
                 current_code,
@@ -190,36 +190,56 @@ fn gatherCodes(
 }
 
 fn huffmanCompress(
-    root: ?*HuffmanNode,
+    root: *?*HuffmanNode,
     stream: *BitStream,
     allocator: std.mem.Allocator,
 ) !void {
-    try buildHuffmanTree(allocator, stream.input_buffer, &root);
-    try serializeHuffmanTree(root, stream);
+    try buildHuffmanTree(allocator, stream.input_buffer, root);
+    try serializeHuffmanTree(root.*, stream);
 
     // Build code table.
-    const codes: [256]u32 = undefined;
-    const code_lengths: [256]u8 = undefined;
+    var codes: [256]u32 = undefined;
+    var code_lengths: [256]u8 = undefined;
+    @memset(&codes, 0);
+    @memset(&code_lengths, 0);
 
+    var curr_code: u32 = 0;
     gatherCodes(
-        root,
+        root.*,
         &codes,
         &code_lengths,
-        0,
+        &curr_code,
         0,
     );
 
     for (stream.input_buffer) |byte| {
-        // TODO: Bit manip u32 to current bit_idx.
-        stream.compression_buffer[stream.compression_buffer_idx];
+        const ubyte: usize = @intCast(byte);
+        const nbits = code_lengths[ubyte];
+
+        const bit_idx = stream.compression_buffer_bit_idx;
+        const shift_len: u5 = @intCast(32 - (nbits - bit_idx));
+        const code  = codes[ubyte] << shift_len;
+
+        const buf_idx = stream.compression_buffer_idx;
+
+        const ptr: *u32 = @ptrCast(@constCast(&stream.compression_buffer[buf_idx..buf_idx+4]));
+        ptr.* |= code;
+
+        stream.compression_buffer_bit_idx += nbits;
+        stream.compression_buffer_idx += (stream.compression_buffer_bit_idx / 8);
+        stream.compression_buffer_bit_idx %= 8;
     }
+
+    try stream.flushChunk();
 }
 
 const BitStream = struct {
     input_file: std.fs.File,
     output_file: std.fs.File,
-    input_buffer: [BUFFER_SIZE]u8,
-    compression_buffer: [BUFFER_SIZE]u8,
+    // input_buffer: [BUFFER_SIZE]u8,
+    // compression_buffer: [BUFFER_SIZE]u8,
+    input_buffer: []u8,
+    compression_buffer: []u8,
     input_file_size: usize,
     compressed_file_size: usize,
     input_buffer_idx: usize,
@@ -228,6 +248,7 @@ const BitStream = struct {
 
     pub fn init(
         input_filename: []const u8,
+        allocator: std.mem.Allocator,
     ) !BitStream {
         @memcpy(SCRATCH_BUFFER[0..input_filename.len], input_filename);
         @memcpy(SCRATCH_BUFFER[input_filename.len..input_filename.len+4], ".fse");
@@ -239,11 +260,17 @@ const BitStream = struct {
             );
         const input_file_size = try input_file.getEndPos();
 
+        const input_buffer = try allocator.alloc(u8, BUFFER_SIZE);
+        var compression_buffer = try allocator.alloc(u8, BUFFER_SIZE);
+        @memset(compression_buffer[0..], 0);
+
         return BitStream{
             .input_file = input_file,
             .output_file = output_file,
-            .input_buffer = undefined,
-            .compression_buffer = undefined,
+            // .input_buffer = undefined,
+            // .compression_buffer = undefined,
+            .input_buffer = input_buffer,
+            .compression_buffer = compression_buffer,
             .input_file_size = input_file_size,
             .compressed_file_size = 0,
             .input_buffer_idx = 0,
@@ -259,10 +286,13 @@ const BitStream = struct {
 
     pub fn flushChunk(self: *BitStream) !void {
         _ = try self.output_file.write(
-            &self.compression_buffer[0..self.compression_buffer_idx]
+            self.compression_buffer[0..self.compression_buffer_idx]
             );
         self.compressed_file_size += self.compression_buffer_idx;
-        self.compression_buffer_idx = 0;
+        @memset(self.compression_buffer[0..self.compression_buffer_idx], 0);
+
+        self.compression_buffer_idx     = 0;
+        self.compression_buffer_bit_idx = 0;
     }
 
     pub fn readChunk(self: *BitStream) !bool {
@@ -274,18 +304,23 @@ const BitStream = struct {
     }
 
     pub fn compress(self: *BitStream, allocator: std.mem.Allocator) !void {
+        const start = std.time.microTimestamp();
+
         var done = false;
         while (!done) {
             done = try self.readChunk();
             var root: ?*HuffmanNode = null;
             try huffmanCompress(&root, self, allocator);
-            try self.flushChunk();
         }
 
+        const time_taken_us = std.time.microTimestamp() - start;
+        const mb_s: f32 = @as(f32, @floatFromInt(self.input_file_size / 1_048_576)) / (@as(f32, @floatFromInt(time_taken_us)) / 1_000_000);
+
         std.debug.print(
-            "Compressed file from {d} to {d} bytes\n", 
-            .{self.input_file_size, self.compressed_file_size}
+            "Compressed file from {d} to {d} bytes in {d}ms\n", 
+            .{self.input_file_size, self.compressed_file_size, @divFloor(time_taken_us, 1000)}
         );
+        std.debug.print("{d}MB/s\n", .{mb_s});
     }
 };
 
@@ -295,7 +330,7 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
-    var stream = try BitStream.init(filename);
+    var stream = try BitStream.init(filename, arena.allocator());
     defer stream.deinit();
 
     try stream.compress(arena.allocator());
