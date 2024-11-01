@@ -213,8 +213,9 @@ fn huffmanCompress(
     );
 
     // TODO: Try doing 4 elements at a time. Maybe go from u32 -> u64 or larger.
+    var ubyte: usize = 0;
     for (stream.input_buffer[0..stream.input_buffer_size]) |byte| {
-        const ubyte: usize = @intCast(byte);
+        ubyte = @intCast(byte);
         const nbits = code_lengths[ubyte];
 
         const bit_idx = stream.compression_buffer_bit_idx;
@@ -227,7 +228,7 @@ fn huffmanCompress(
         ptr.* |= code;
 
         stream.compression_buffer_bit_idx += nbits;
-        stream.compression_buffer_idx += (stream.compression_buffer_bit_idx / 8);
+        stream.compression_buffer_idx += @divFloor(stream.compression_buffer_bit_idx, 8);
         stream.compression_buffer_bit_idx %= 8;
     }
 
@@ -329,10 +330,27 @@ const BitStream = struct {
 };
 
 pub fn main() !void {
-    const filename = "../../data/enwik8";
-
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
+
+    var filename: []const u8 = undefined;
+
+    var args = try std.process.argsWithAllocator(arena.allocator());
+    defer args.deinit();
+    var idx: usize = 0;
+    while (args.next()) |arg| {
+        if (idx == 0) {
+            // Skip binary name.
+        } else if (idx == 1) {
+            filename = arg;
+        } else {
+            @panic("Too many arguments.");
+        }
+        idx += 1;
+    }
+    if (idx == 1) {
+        filename = "../../data/enwik8";
+    }
 
     var stream = try BitStream.init(filename, arena.allocator());
     defer stream.deinit();
