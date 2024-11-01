@@ -212,7 +212,8 @@ fn huffmanCompress(
         0,
     );
 
-    for (stream.input_buffer) |byte| {
+    // TODO: Try doing 4 elements at a time. Maybe go from u32 -> u64 or larger.
+    for (stream.input_buffer[0..stream.input_buffer_size]) |byte| {
         const ubyte: usize = @intCast(byte);
         const nbits = code_lengths[ubyte];
 
@@ -239,6 +240,7 @@ const BitStream = struct {
     // input_buffer: [BUFFER_SIZE]u8,
     // compression_buffer: [BUFFER_SIZE]u8,
     input_buffer: []u8,
+    input_buffer_size: usize,
     compression_buffer: []u8,
     input_file_size: usize,
     compressed_file_size: usize,
@@ -270,6 +272,7 @@ const BitStream = struct {
             // .input_buffer = undefined,
             // .compression_buffer = undefined,
             .input_buffer = input_buffer,
+            .input_buffer_size = 0,
             .compression_buffer = compression_buffer,
             .input_file_size = input_file_size,
             .compressed_file_size = 0,
@@ -299,6 +302,7 @@ const BitStream = struct {
         const bytes_read = try self.input_file.read(
             self.input_buffer[0..BUFFER_SIZE]
             );
+        self.input_buffer_size = bytes_read;
 
         return (bytes_read < BUFFER_SIZE);
     }
