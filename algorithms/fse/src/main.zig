@@ -1,15 +1,17 @@
 const std = @import("std");
+const builtin = @import("builtin");
 
 
 const BUFFER_SIZE: usize = (1 << 20);
 var SCRATCH_BUFFER: [4096]u8 = undefined;
+const endianness = builtin.cpu.arch.endian();
 
 
 const HuffmanNode = struct {
     value: u8,
     freq: u32,
-    left:  *HuffmanNode,
-    right: *HuffmanNode,
+    left:  ?*HuffmanNode,
+    right: ?*HuffmanNode,
 };
 
 fn lessThan(context: void, a: *HuffmanNode, b: *HuffmanNode) std.math.Order {
@@ -17,10 +19,20 @@ fn lessThan(context: void, a: *HuffmanNode, b: *HuffmanNode) std.math.Order {
     return std.math.order(a.freq, b.freq);
 }
 
+inline fn readValFromFile(
+    comptime T: type,
+    file: *std.fs.File,
+) !T {
+    var _val: [@sizeOf(T)]u8 = undefined;
+    _ = try file.read(std.mem.asBytes(&_val));
+    return std.mem.readInt(T, &_val, endianness);
+}
+
+
 pub fn buildHuffmanTree(
     allocator: std.mem.Allocator,
     buffer: *[BUFFER_SIZE]u8,
-    root: **HuffmanNode,
+    root: *?*HuffmanNode,
 ) !void {
     // To start, do this on a chunk by chunk level.
     var freqs: [256]usize = undefined;
@@ -51,11 +63,10 @@ pub fn buildHuffmanTree(
         if (freq > 0) {
             const new_node: *HuffmanNode = try allocator.create(HuffmanNode);
             new_node.* = HuffmanNode{
-                .value = @intCast(i),
-                // .freq = freq,
-                .freq = @intCast(freq),
-                .left = undefined,
-                .right = undefined,
+                .value = @truncate(i),
+                .freq = @truncate(freq),
+                .left = null,
+                .right = null,
             };
             try pq.add(new_node);
         }
@@ -79,15 +90,141 @@ pub fn buildHuffmanTree(
     root.* = pq.remove();
 }
 
+pub fn serializeHuffmanTree(
+    root: ?*HuffmanNode,
+    stream: *BitStream,
+) !void {
+    if (root) |_root| {
+        _ = try stream.output_file.write(
+            std.mem.asBytes(&_root.value),
+            );
+        _ = try stream.output_file.write(
+            std.mem.asBytes(&_root.freq),
+            );
+
+        try serializeHuffmanTree(_root.left, stream);
+        try serializeHuffmanTree(_root.right, stream);
+    } else {
+        _ = try stream.output_file.write(
+            std.mem.asBytes(&@as(i32, @intCast(-1))),
+            );
+        return;
+    }
+}
+
+pub fn deserializeHuffmanTree(
+    root: *?*HuffmanNode,
+    stream: *BitStream,
+    allocator: std.mem.Allocator,
+) !void {
+    const val = try readValFromFile(i32, &stream.input_file);
+    if (val == -1) return;
+    try stream.input_file.seekBy(-4);
+
+    if (root.*) |_root| {
+        _ = try stream.input_file.read(
+            std.mem.asBytes(&_root.value),
+            );
+        _ = try stream.input_file.read(
+            std.mem.asBytes(&_root.freq),
+            );
+        const new_node = try allocator.create(HuffmanNode);
+        new_node.* = HuffmanNode{
+            .value = try readValFromFile(u8, &stream.input_file),
+            .freq = try readValFromFile(u32, &stream.input_file),
+            .left = undefined,
+            .right = undefined,
+        };
+        root.* = new_node;
+
+        try deserializeHuffmanTree(&new_node.left, stream, allocator);
+        try deserializeHuffmanTree(&new_node.right, stream, allocator);
+    } else {
+        @panic("Null node without flag from data.");
+    }
+}
+
+fn gatherCodes(
+    _root: ?*HuffmanNode,
+    codes: *[256]u32,
+    code_lengths: *[256]u8,
+    current_code: *u32,
+    current_code_length: u8,
+) void {
+    if (_root) |root| {
+        const left_null  = (root.left == null);
+        const right_null = (root.right == null);
+
+        if (left_null and right_null) {
+            const value = @as(usize, @intCast(root.value));
+
+            codes[value] = current_code;
+            code_lengths[value] = current_code_length;
+            return;
+        }
+
+        current_code.* <<= 1;
+
+        if (!left_null) {
+            gatherCodes(
+                _root.left,
+                codes,
+                code_lengths,
+                current_code,
+                current_code_length + 1,
+            );
+        }
+        if (!right_null) {
+            gatherCodes(
+                _root.right,
+                codes,
+                code_lengths,
+                current_code,
+                current_code_length + 1,
+            );
+        }
+
+    } else {
+        @panic("Error while gathering codes. Null nodes passed to function.");
+    }
+}
+
+fn huffmanCompress(
+    root: ?*HuffmanNode,
+    stream: *BitStream,
+    allocator: std.mem.Allocator,
+) !void {
+    try buildHuffmanTree(allocator, stream.input_buffer, &root);
+    try serializeHuffmanTree(root, stream);
+
+    // Build code table.
+    const codes: [256]u32 = undefined;
+    const code_lengths: [256]u8 = undefined;
+
+    gatherCodes(
+        root,
+        &codes,
+        &code_lengths,
+        0,
+        0,
+    );
+
+    for (stream.input_buffer) |byte| {
+        // TODO: Bit manip u32 to current bit_idx.
+        stream.compression_buffer[stream.compression_buffer_idx];
+    }
+}
 
 const BitStream = struct {
     input_file: std.fs.File,
     output_file: std.fs.File,
-    buffer: [BUFFER_SIZE]u8,
+    input_buffer: [BUFFER_SIZE]u8,
+    compression_buffer: [BUFFER_SIZE]u8,
     input_file_size: usize,
-    buffer_idx: usize,
-    file_byte_idx: usize,
-    file_bit_idx: usize,
+    compressed_file_size: usize,
+    input_buffer_idx: usize,
+    compression_buffer_idx: usize,
+    compression_buffer_bit_idx: usize,
 
     pub fn init(
         input_filename: []const u8,
@@ -105,11 +242,13 @@ const BitStream = struct {
         return BitStream{
             .input_file = input_file,
             .output_file = output_file,
-            .buffer = undefined,
+            .input_buffer = undefined,
+            .compression_buffer = undefined,
             .input_file_size = input_file_size,
-            .buffer_idx = 0,
-            .file_byte_idx = 0,
-            .file_bit_idx = 0,
+            .compressed_file_size = 0,
+            .input_buffer_idx = 0,
+            .compression_buffer_idx = 0,
+            .compression_buffer_bit_idx = 0,
         };
     }
 
@@ -120,31 +259,32 @@ const BitStream = struct {
 
     pub fn flushChunk(self: *BitStream) !void {
         _ = try self.output_file.write(
-            self.buffer[0..self.buffer_idx]
+            &self.compression_buffer[0..self.compression_buffer_idx]
             );
-        self.buffer_idx = 0;
+        self.compressed_file_size += self.compression_buffer_idx;
+        self.compression_buffer_idx = 0;
     }
 
-    pub fn readChunk(self: *BitStream) !void {
-        const bytes_remaining = self.input_file_size - self.file_byte_idx;
-        const bytes_to_read = @min(bytes_remaining, BUFFER_SIZE);
-        _ = try self.input_file.read(
-            self.buffer[0..bytes_to_read]
+    pub fn readChunk(self: *BitStream) !bool {
+        const bytes_read = try self.input_file.read(
+            self.input_buffer[0..BUFFER_SIZE]
             );
-        self.file_byte_idx += bytes_to_read;
+
+        return (bytes_read < BUFFER_SIZE);
     }
 
     pub fn compress(self: *BitStream, allocator: std.mem.Allocator) !void {
-        while (self.file_byte_idx < self.input_file_size) {
-            try self.readChunk();
-            var root: *HuffmanNode = undefined;
-            try buildHuffmanTree(allocator, &self.buffer, &root);
+        var done = false;
+        while (!done) {
+            done = try self.readChunk();
+            var root: ?*HuffmanNode = null;
+            try huffmanCompress(&root, self, allocator);
             try self.flushChunk();
         }
 
         std.debug.print(
             "Compressed file from {d} to {d} bytes\n", 
-            .{self.input_file_size, self.file_byte_idx}
+            .{self.input_file_size, self.compressed_file_size}
         );
     }
 };
