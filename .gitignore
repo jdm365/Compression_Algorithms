@@ -3,4 +3,4 @@
 .txt
 data/
 *.zig-cache/
-*.zig-out/
+zig-out/
