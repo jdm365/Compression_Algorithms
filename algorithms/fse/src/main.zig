@@ -243,6 +243,51 @@ fn gatherCodes(
     }
 }
 
+
+fn gatherCodesLe(
+    _root: ?*HuffmanNode,
+    codes: *[256]u64,
+    code_lengths: *[256]u8,
+    current_code: u32,
+    current_code_length: u8,
+) void {
+    if (_root) |root| {
+        const left_null  = (root.left == null);
+        const right_null = (root.right == null);
+
+        if (left_null and right_null) {
+            const value = @as(usize, @intCast(root.value));
+
+            codes[value] = current_code;
+            code_lengths[value] = current_code_length;
+            // std.debug.print("{b:0>32}\n", .{current_code << @intCast(32 - current_code_length)});
+            return;
+        }
+
+        if (!left_null) {
+            gatherCodes(
+                root.left,
+                codes,
+                code_lengths,
+                current_code << 1,
+                current_code_length + 1,
+            );
+        }
+        if (!right_null) {
+            gatherCodes(
+                root.right,
+                codes,
+                code_lengths,
+                (current_code << 1) | 1,
+                current_code_length + 1,
+            );
+        }
+
+    } else {
+        @panic("Error while gathering codes. Null nodes passed to function.");
+    }
+}
+
 fn huffmanCompress(
     root: *?*HuffmanNode,
     stream: *BitStream,
@@ -275,7 +320,6 @@ fn huffmanCompress(
         const bit_idx = stream.compression_buffer_bit_idx;
         var code = codes[ubyte] >> @intCast(bit_idx);
 
-        // const curr_word = std.mem.readInt(
         code |= std.mem.readInt(
             u32,
             stream.compression_buffer[stream.compression_buffer_idx..stream.compression_buffer_idx+4][0..4],
@@ -287,18 +331,57 @@ fn huffmanCompress(
             stream.compression_buffer[stream.compression_buffer_idx..stream.compression_buffer_idx+4], 
             std.mem.asBytes(&code),
             );
-        // std.debug.print("{d}\n", .{nbits});
-        // std.debug.print("{d}\n", .{stream.compression_buffer_idx});
-        // std.debug.print("{b:0>32}\n", .{codes[ubyte] >> @intCast(bit_idx)});
-        // std.debug.print("{b:0>32}\n", .{curr_word});
-        // std.debug.print("{b:0>8}\n", .{std.mem.asBytes(&code)});
-
-        // if (byte == 'r') @breakpoint();
 
         stream.compression_buffer_bit_idx += nbits;
         stream.compression_buffer_idx += @divFloor(stream.compression_buffer_bit_idx, 8);
         stream.compression_buffer_bit_idx %= 8;
+    }
 
+    try stream.flushChunk(true);
+}
+
+
+fn huffmanCompressLe(
+    root: *?*HuffmanNode,
+    stream: *BitStream,
+    allocator: std.mem.Allocator,
+) !void {
+    try buildHuffmanTree(allocator, stream.input_buffer, root);
+    try serializeHuffmanTree(root.*, stream);
+
+    // Build code table.
+    var codes: [256]u64 = undefined;
+    var code_lengths: [256]u8 = undefined;
+    @memset(&codes, 0);
+    @memset(&code_lengths, 0);
+    @memset(stream.compression_buffer, 0);
+
+    gatherCodesLe(
+        root.*,
+        &codes,
+        &code_lengths,
+        0,
+        0,
+    );
+
+    // Try little endian style. Fill buffer from right to left to avoid endian swapping.
+    stream.compression_buffer_idx = BUFFER_SIZE - 1;
+    var cb_ptr = @as(*u64, @ptrCast(&stream.compression_buffer[stream.compression_buffer_idx]));
+
+    var ubyte: usize = 0;
+    for (stream.input_buffer[0..stream.input_buffer_size]) |byte| {
+        ubyte = @intCast(byte);
+        const nbits = code_lengths[ubyte];
+
+        const code = codes[ubyte] << @intCast(stream.compression_buffer_bit_idx);
+        cb_ptr.* |= code;
+
+        stream.compression_buffer_bit_idx += nbits;
+        if (stream.compression_buffer_bit_idx > 64) {
+            // TODO: need to branch on shift sign.
+            cb_ptr = @ptrFromInt(@intFromPtr(cb_ptr) - 8);
+            stream.compression_buffer_bit_idx %= 64;
+        }
     }
 
     try stream.flushChunk(true);
