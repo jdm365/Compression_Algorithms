@@ -5,6 +5,7 @@ const builtin = @import("builtin");
 const BUFFER_SIZE: usize = (1 << 22);
 var SCRATCH_BUFFER: [16_384]u8 = undefined;
 const endianness = builtin.cpu.arch.endian();
+const big_endian = std.builtin.Endian.big;
 
 
 const CompressedSize = packed struct(u32) {
@@ -15,6 +16,15 @@ const CompressedSize = packed struct(u32) {
         return @as(CompressedSize, @bitCast(try readValFromFile(u32, file)));
     }
 };
+
+pub fn sum(comptime T: type, x: []T) usize {
+    var _sum: usize = 0;
+    for (x) |val| {
+        _sum += @intCast(val);
+    }
+    return _sum;
+}
+
 
 const HuffmanNode = struct {
     value: u8,
@@ -55,6 +65,30 @@ inline fn readValFromFile(
     var _val: [@sizeOf(T)]u8 = undefined;
     _ = try file.read(std.mem.asBytes(&_val));
     return std.mem.readInt(T, &_val, endianness);
+}
+
+pub fn printBits(comptime T: type, value: T) void {
+    var num_bits: T = @sizeOf(T) * 8;
+    num_bits += @divFloor(num_bits, 8) - 1;
+    var cntr: usize = 0;
+
+    for (0..num_bits) |_idx| {
+        const idx = num_bits - _idx - 1;
+
+        if (cntr == 8) {
+            SCRATCH_BUFFER[idx] = ' ';
+            cntr = 0;
+            continue;
+        }
+
+        if ((value & (@as(T, @intCast(1)) << @truncate(idx))) != 0) {
+            SCRATCH_BUFFER[idx] = '1';
+        } else {
+            SCRATCH_BUFFER[idx] = '0';
+        }
+        cntr += 1;
+    }
+    std.debug.print("{s}\n", .{SCRATCH_BUFFER[0..num_bits]});
 }
 
 pub fn buildHuffmanTree(
@@ -169,7 +203,6 @@ fn gatherCodes(
     _root: ?*HuffmanNode,
     codes: *[256]u32,
     code_lengths: *[256]u8,
-    // current_code: *u32,
     current_code: u32,
     current_code_length: u8,
 ) void {
@@ -180,30 +213,27 @@ fn gatherCodes(
         if (left_null and right_null) {
             const value = @as(usize, @intCast(root.value));
 
-            codes[value] = current_code;
+            codes[value] = current_code << @intCast(32 - current_code_length);
             code_lengths[value] = current_code_length;
+            // std.debug.print("{b:0>32}\n", .{current_code << @intCast(32 - current_code_length)});
             return;
         }
-
-        // current_code <<= 1;
-        var code = current_code << 1;
 
         if (!left_null) {
             gatherCodes(
                 root.left,
                 codes,
                 code_lengths,
-                code,
+                current_code << 1,
                 current_code_length + 1,
             );
         }
         if (!right_null) {
-            code |= 1;
             gatherCodes(
                 root.right,
                 codes,
                 code_lengths,
-                code,
+                (current_code << 1) | 1,
                 current_code_length + 1,
             );
         }
@@ -226,6 +256,7 @@ fn huffmanCompress(
     var code_lengths: [256]u8 = undefined;
     @memset(&codes, 0);
     @memset(&code_lengths, 0);
+    @memset(stream.compression_buffer, 0);
 
     gatherCodes(
         root.*,
@@ -235,15 +266,6 @@ fn huffmanCompress(
         0,
     );
 
-    for (0..256) |idx| {
-        std.debug.print("code: {d}\n", .{codes[idx]});
-        std.debug.print("OG code length: {d}\n", .{code_lengths[idx]});
-        std.debug.print("OG code: ", .{});
-        printBits(u32, codes[idx]);
-        std.debug.print("\n", .{});
-    }
-    @breakpoint();
-
     // TODO: Try doing 4 elements at a time. Maybe go from u32 -> u64 or larger.
     var ubyte: usize = 0;
     for (stream.input_buffer[0..stream.input_buffer_size]) |byte| {
@@ -251,25 +273,27 @@ fn huffmanCompress(
         const nbits = code_lengths[ubyte];
 
         const bit_idx = stream.compression_buffer_bit_idx;
-        const shift_len: i8 = 32 - @as(i8, @intCast(nbits)) - @as(i8, @intCast(bit_idx));
+        var code = codes[ubyte] >> @intCast(bit_idx);
 
-        if (shift_len >= 0) {
-            const code = std.mem.nativeToBig(u32, codes[ubyte] << @intCast(shift_len));
-            @memcpy(stream.compression_buffer[stream.compression_buffer_idx..stream.compression_buffer_idx+4], std.mem.asBytes(&code));
-            std.debug.print("Shift len: {d}\n", .{shift_len});
-            std.debug.print("Bit idx:   {d}\n", .{bit_idx});
-            std.debug.print("OG code length: {d}\n", .{nbits});
-            std.debug.print("OG code:         ", .{});
-            printBits(u32, codes[ubyte]);
-            std.debug.print("Shifted code be: ", .{});
-            printBits(u32, code);
-            std.debug.print("Shifted code le: ", .{});
-            printBits(u32, codes[ubyte] >> @intCast(shift_len));
-            std.debug.print("\n", .{});
-        } else {
-            const code: u64 = std.mem.nativeToBig(u64, @as(u64, @intCast(codes[ubyte])) << @intCast(32 + shift_len));
-            @memcpy(stream.compression_buffer[stream.compression_buffer_idx..stream.compression_buffer_idx+8], std.mem.asBytes(&code));
-        }
+        // const curr_word = std.mem.readInt(
+        code |= std.mem.readInt(
+            u32,
+            stream.compression_buffer[stream.compression_buffer_idx..stream.compression_buffer_idx+4][0..4],
+            big_endian,
+        );
+
+        code = @byteSwap(code);
+        @memcpy(
+            stream.compression_buffer[stream.compression_buffer_idx..stream.compression_buffer_idx+4], 
+            std.mem.asBytes(&code),
+            );
+        // std.debug.print("{d}\n", .{nbits});
+        // std.debug.print("{d}\n", .{stream.compression_buffer_idx});
+        // std.debug.print("{b:0>32}\n", .{codes[ubyte] >> @intCast(bit_idx)});
+        // std.debug.print("{b:0>32}\n", .{curr_word});
+        // std.debug.print("{b:0>8}\n", .{std.mem.asBytes(&code)});
+
+        // if (byte == 'r') @breakpoint();
 
         stream.compression_buffer_bit_idx += nbits;
         stream.compression_buffer_idx += @divFloor(stream.compression_buffer_bit_idx, 8);
@@ -278,30 +302,6 @@ fn huffmanCompress(
     }
 
     try stream.flushChunk(true);
-}
-
-pub fn printBits(comptime T: type, value: T) void {
-    var num_bits: T = @sizeOf(T) * 8;
-    num_bits += @divFloor(num_bits, 8) - 1;
-    var cntr: usize = 0;
-
-    for (0..num_bits) |_idx| {
-        const idx = num_bits - _idx - 1;
-
-        if (cntr == 8) {
-            SCRATCH_BUFFER[idx] = ' ';
-            cntr = 0;
-            continue;
-        }
-
-        if ((value & (@as(T, @intCast(1)) << @truncate(idx))) != 0) {
-            SCRATCH_BUFFER[idx] = '1';
-        } else {
-            SCRATCH_BUFFER[idx] = '0';
-        }
-        cntr += 1;
-    }
-    std.debug.print("{s}\n", .{SCRATCH_BUFFER[0..num_bits]});
 }
 
 fn huffmanDecompress(
@@ -313,11 +313,6 @@ fn huffmanDecompress(
     const compressed_size = try CompressedSize.readFromFile(&stream.input_file);
     const done = (compressed_size.last_block == 1);
     _ = try stream.readChunk(@intCast(compressed_size.value));
-
-    var sum: usize = 0;
-    for (stream.input_buffer[0..16384]) |e| {
-        sum += @intCast(e);
-    }
 
     stream.compression_buffer_idx = 0;
     var byte_idx: usize = 0;
@@ -345,12 +340,6 @@ fn huffmanDecompress(
                 bit_idx %= 8;
             }
 
-            if (stream.compression_buffer_idx == BUFFER_SIZE) {
-                std.debug.print("CBuffer idx: {d}\n", .{stream.compression_buffer_idx});
-                std.debug.print("Byte idx: {d}\n", .{byte_idx});
-                @panic("Compression buffer full.");
-            }
-            std.debug.print("{c}", .{node.value});
             stream.compression_buffer[stream.compression_buffer_idx] = node.value;
             stream.compression_buffer_idx += 1;
         }
@@ -527,7 +516,12 @@ pub fn main() !void {
     }
     if (idx == 1) {
         filename = "../../data/enwik8";
+        // filename = "../../data/declaration_of_independence.txt";
     }
+
+    // TMP
+    // _decompress = true;
+    // filename = "../../data/declaration_of_independence.txt.fse";
 
     std.debug.print("Decompress: {}\n", .{_decompress});
     var stream = try BitStream.init(filename, arena.allocator(), _decompress);
