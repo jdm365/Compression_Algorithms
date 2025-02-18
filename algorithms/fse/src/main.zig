@@ -373,14 +373,25 @@ fn huffmanCompressLe(
         ubyte = @intCast(byte);
         const nbits = code_lengths[ubyte];
 
-        const code = codes[ubyte] << @intCast(stream.compression_buffer_bit_idx);
-        cb_ptr.* |= code;
+        if (nbits - stream.compression_buffer_bit_idx > 0) {
+            cb_ptr.* |= (codes[ubyte] << (nbits - stream.compression_buffer_bit_idx));
+        } else {
+            cb_ptr.* |= (codes[ubyte] >> -(nbits - stream.compression_buffer_bit_idx));
+        }
+        // const code = codes[ubyte] << @intCast(stream.compression_buffer_bit_idx);
+        // cb_ptr.* |= code;
 
         stream.compression_buffer_bit_idx += nbits;
         if (stream.compression_buffer_bit_idx > 64) {
             // TODO: need to branch on shift sign.
             cb_ptr = @ptrFromInt(@intFromPtr(cb_ptr) - 8);
             stream.compression_buffer_bit_idx %= 64;
+
+            if (nbits - stream.compression_buffer_bit_idx > 0) {
+                cb_ptr.* = (codes[ubyte] << (nbits - stream.compression_buffer_bit_idx));
+            } else {
+                cb_ptr.* = (codes[ubyte] >> -(nbits - stream.compression_buffer_bit_idx));
+            }
         }
     }
 
