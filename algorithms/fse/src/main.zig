@@ -7,80 +7,47 @@ const State = struct {
 };
 
 const BitStream = struct {
-    buffer: []u8,
-    byte_pos: usize,
-    bit_idx: u3,
+    input_buffer: []const u8,
+    output_buffer: []u64,
+    i_buffer_idx: usize,
+    i_bit_idx: usize,
+    o_buffer_idx: usize,
+    o_bit_idx: usize,
     
-    fn init(buffer: []u8) BitStream {
-        return .{
-            .buffer = buffer,
-            .byte_pos = 0,
-            .bit_idx = 0,
+    fn init(input_buffer: []const u8, output_buffer: []u64) BitStream {
+        return BitStream{
+            .input_buffer = input_buffer,
+            .output_buffer = output_buffer,
+            .i_buffer_idx = 0,
+            .i_bit_idx = 0,
+            .o_buffer_idx = 0,
+            .o_bit_idx = 0,
         };
     }
     
-    fn addBits(self: *BitStream, bits: u32, nb_bits: u5) void {
-        var current_byte = switch (self.bit_idx) {
-            0 => 0,
-            else => self.buffer[self.position],
-        };
-        
-        current_byte |= @as(u8, @intCast(bits << self.bit_position));
-        self.buffer[self.position] = current_byte;
-        
-        const bits_written = @as(u32, @intCast(8 - self.bit_position));
-        if (nb_bits < bits_written) {
-            self.bit_position += nb_bits;
-            return;
+    inline fn addBits(self: *BitStream, nb_bits: u8) void {
+        const overflow = nb_bits > 63 - self.bit_idx;
+
+        self.output_buffer[self.buffer_idx] |= (bits << @as(u6, @truncate(self.bit_idx)));
+
+        if (overflow) {
+            self.buffer_idx += 1;
+            self.output_buffer[self.buffer_idx] |= (bits >> @as(u6, @truncate(63 - self.bit_idx)));
         }
-        
-        var remaining_bits = nb_bits - bits_written;
-        var remaining_value = bits >> bits_written;
-        
-        self.position += 1;
-        while (remaining_bits >= 8) {
-            self.buffer[self.position] = @as(u8, @intCast(remaining_value));
-            remaining_value >>= 8;
-            remaining_bits -= 8;
-            self.position += 1;
-        }
-        
-        if (remaining_bits > 0) {
-            self.buffer[self.position] = @as(u8, @intCast(remaining_value));
-            self.bit_position = remaining_bits;
-        } else {
-            self.bit_position = 0;
-        }
+
+        self.bit_idx = (self.bit_idx + nb_bits) % 64;
     }
 };
 
-fn encodeSymbol(state: *State, symbol: u8, stream: *BitStream) void {
+inline fn encodeSymbol(state: *State, stream: *BitStream) void {
     // Get next state from transition table using both state and symbol
-    var entry: ?TT_Entry = null;
-    for (TT) |e| {
-        if (e.symbol == symbol and e.next_state == state.value) {
-            entry = e;
-            break;
-        }
-    }
-    if (entry == null) @panic("Invalid state transition");
-    const next_state = entry.?.next_state;
+    const entry = TT[state.value];
+    stream.addBits(state.value, entry.num_bits);
     
-    // Calculate number of bits to output
-    const nb_bits = @as(u5, @intCast(TABLE_LOG)) - @as(u5, @intCast(
-        @clz(next_state + 1) - (32 - TABLE_LOG)
-    ));
-    
-    // Output nb_bits from state
-    if (nb_bits > 0) {
-        stream.addBits(state.value, nb_bits);
-    }
-    
-    // Update state
-    state.value = next_state;
+    state.value = entry.next_state + ;
 }
 
-fn compress(input: []const u8, output: []u8) usize {
+fn compress(input: []const u8, output: []u64) usize {
     var stream = BitStream.init(output);
     var state = State{ .value = 0, .bits_left = 0 };
     
@@ -97,26 +64,26 @@ fn compress(input: []const u8, output: []u8) usize {
     // Flush remaining state bits
     stream.addBits(state.value, TABLE_LOG);
     
-    // return stream.position + if (stream.bit_position > 0) 1 else 0;
-    return stream.position + @intFromBool(stream.bit_position > 0);
+    return 8 * stream.buffer_idx + @divFloor(stream.bit_idx, 8);
 }
 
 var SCRATCH_BUFFER: [16_384]u8 = undefined;
 var FREQ_TABLE: [256]usize = undefined;
 
-const TT_Entry = struct {
+const TT_Entry = packed struct (u32){
     symbol: u8,
     next_state: u16,
+    num_bits: u8,
 };
 
 // Transition Table
-const TT_SIZE = 256;
+const TABLE_LOG: usize = 8;
+const TT_SIZE = 1 << TABLE_LOG;
 var TT: [TT_SIZE]TT_Entry = undefined;
 
 const endianness = builtin.cpu.arch.endian();
 const big_endian = std.builtin.Endian.big;
 
-const TABLE_LOG = 8;
 
 fn buildFrequencyTable(buffer: []const u8) void {
     // When optimizing later, could do map reduce with multiple tables
@@ -207,12 +174,13 @@ fn buildTransitionTable() void {
         const step = TT_SIZE / freq;
         
         while (pos < TT_SIZE) {
-            const state = @as(u16, @intCast(pos));
-            const next_state = (state >> @as(u4, @intCast(bits))) + offset;
+            const state = @as(u16, @truncate(pos));
+            const next_state = (state >> @as(u4, @truncate(bits))) + offset;
             
             TT[pos] = .{
-                .symbol = @as(u8, @intCast(sym)),
+                .symbol = @as(u8, @truncate(sym)),
                 .next_state = next_state,
+                .num_bits = bits,
             };
             
             pos += step;
@@ -262,7 +230,10 @@ pub fn main() !void {
 
     const file_size = try input_file.getEndPos();
     const buffer = try arena.allocator().alloc(u8, file_size);
-    const output_buffer = try arena.allocator().alloc(u8, file_size);
+    const output_buffer = try arena.allocator().alloc(
+        u64, 
+        try std.math.divCeil(usize, file_size, 8),
+        );
 
     _ = try input_file.readAll(buffer);
     std.debug.print("Buffer: {s}\n", .{buffer[0..64]});
